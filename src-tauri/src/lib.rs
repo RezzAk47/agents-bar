@@ -246,17 +246,17 @@ async fn gh_run_list(slug: String) -> Result<String, String> {
 /// Shows a transcript in the file manager, but only a file this app's own scanner found.
 #[tauri::command]
 fn reveal_transcript(app: AppHandle, state: State<AppState>, path: String) -> Result<(), String> {
-    let known = state
+    let real = state
         .scanner
         .lock()
         .map_err(|e| e.to_string())?
-        .is_known(&path);
-    if !known {
+        .known_path(&path);
+    let Some(real) = real else {
         return Err("that file is not one of the scanned transcripts".into());
-    }
+    };
     use tauri_plugin_opener::OpenerExt;
     app.opener()
-        .reveal_item_in_dir(&path)
+        .reveal_item_in_dir(&real)
         .map_err(|e| e.to_string())
 }
 

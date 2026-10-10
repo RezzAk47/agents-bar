@@ -184,7 +184,8 @@ fn files_in(
         }
         *budget -= 1;
         let name = e.file_name();
-        let Some(name) = name.to_str() else { continue };
+        // the prefix and suffix are ASCII, so a lossy view is enough to match; the real OsString path is what gets opened
+        let name = name.to_string_lossy();
         if !name.starts_with(prefix) || !name.ends_with(".jsonl") {
             continue;
         }
@@ -279,7 +280,16 @@ impl Scanner {
 
     /// Paths the page may ask to reveal: only what this scanner found.
     pub fn is_known(&self, path: &str) -> bool {
-        self.known.iter().any(|k| k.path.to_str() == Some(path))
+        self.known_path(path).is_some()
+    }
+
+    /// The real path (which may not be UTF-8) behind a path string the page was given. The page sees non-UTF-8 names in their
+    /// lossy form, so that form is what is compared; the real path is what gets opened or revealed.
+    pub fn known_path(&self, path: &str) -> Option<PathBuf> {
+        self.known
+            .iter()
+            .find(|k| k.path.to_string_lossy() == path)
+            .map(|k| k.path.clone())
     }
 
     /// One call. `rediscover` runs the folder walk; otherwise only the known files are looked at (one stat each).
@@ -1293,6 +1303,34 @@ mod tests {
             "{}/../agent-a.jsonl",
             p.parent().unwrap().display()
         )));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_non_utf8_file_name_is_scanned_and_can_be_revealed_by_its_real_path() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let d = tempfile::tempdir().unwrap();
+        let cl = d.path().join("c");
+        let dir = cl.join("-p").join("s").join("subagents");
+        fs::create_dir_all(&dir).unwrap();
+        let real = dir.join(OsStr::from_bytes(b"agent-\xff\xfe.jsonl"));
+        if fs::write(&real, line(1, "")).is_err() {
+            return; // this file system refuses such names
+        }
+        let mut s = Scanner::new(cl, d.path().join("none"));
+        let r = s.scan(now_ms(), true);
+        assert_eq!(r.known.len(), 1, "not skipped");
+        assert_eq!(r.files.len(), 1, "and read");
+        let shown = r.known[0].path.clone();
+        assert!(shown.contains("agent-"), "{shown}");
+        assert!(s.is_known(&shown));
+        assert_eq!(
+            s.known_path(&shown),
+            Some(real),
+            "the real path is what opens"
+        );
+        assert_eq!(s.known_path("/etc/passwd"), None);
     }
 
     #[test]
