@@ -110,8 +110,9 @@ export function projectOf(a: Pick<Agent, 'source' | 'path'>): string {
   const parts = (a.path || '').split(/[\\/]+/).filter(Boolean);
   const at = parts.lastIndexOf('projects');
   if (at < 0 || at + 1 >= parts.length) return '';
-  let tokens = parts[at + 1]!.replace(/^-+|-+$/g, '').split('-');
-  if (tokens.length >= 2 && tokens[0] === 'Users') tokens = tokens.slice(2); // drop 'Users-<name>'
+  // Claude Code names the folder after the project path with separators turned into '-': C:\Users\Ann\x -> C--Users-Ann-x
+  let tokens = parts[at + 1]!.replace(/^[A-Za-z]--/, '').replace(/^-+|-+$/g, '').split('-');
+  if (tokens.length >= 2 && (tokens[0] === 'Users' || tokens[0] === 'home')) tokens = tokens.slice(2); // drop 'Users-<name>' / 'home-<name>'
   while (tokens.length && ['Desktop', 'Documents', 'Projects', 'Developer', 'Code'].includes(tokens[0]!)) tokens = tokens.slice(1);
   return clean(tokens.join('-'), 40) || 'home';
 }

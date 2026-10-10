@@ -184,7 +184,12 @@ describe('notification text and Today', () => {
     expect(projectOf(agent({ path: '/h/.claude/projects/-Users-me-Documents-my-app/s/subagents/a.jsonl' }))).toBe('my-app');
     expect(projectOf(agent({ path: '/h/.claude/projects/-Users-me/s/subagents/a.jsonl' }))).toBe('home');
     expect(projectOf(agent({ path: '/nothing/here.jsonl' }))).toBe('');
-    expect(projectOf(agent({ path: 'C:\\Users\\me\\.claude\\projects\\C--code-site\\s\\subagents\\a.jsonl' }))).toBe('C--code-site');
+    expect(projectOf(agent({ path: 'C:\\Users\\me\\.claude\\projects\\C--code-site\\s\\subagents\\a.jsonl' }))).toBe('code-site');
+    // Windows home folder (C:\Users\Ann\Desktop\shop -> C--Users-Ann-Desktop-shop) and Linux (/home/ann/shop -> -home-ann-shop)
+    expect(projectOf(agent({ path: 'C:\\Users\\Ann\\.claude\\projects\\C--Users-Ann-Desktop-shop\\s\\subagents\\a.jsonl' }))).toBe('shop');
+    expect(projectOf(agent({ path: 'C:\\Users\\Ann\\.claude\\projects\\C--Users-Ann\\s\\subagents\\a.jsonl' }))).toBe('home');
+    expect(projectOf(agent({ path: '/home/ann/.claude/projects/-home-ann-shop/s/subagents/a.jsonl' }))).toBe('shop');
+    expect(projectOf(agent({ path: '/home/ann/.claude/projects/-home-ann/s/subagents/a.jsonl' }))).toBe('home');
   });
   it('Today is this local day, only done, newest first', () => {
     const noon = new Date(2026, 9, 7, 12, 0, 0).getTime() / 1000;
