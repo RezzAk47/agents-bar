@@ -5,6 +5,7 @@
 //! moves on and the awake clock does not, so their difference jumps; a wall-clock step (the user or NTP moving the clock)
 //! changes neither of them, so it is NOT mistaken for sleep. Where only one monotonic clock is available (Windows here), a
 //! gap of more than 30 s between two ticks of an unthrottled thread is taken as a suspend.
+//! Where two clocks exist (Unix) only their difference counts, so a thread that was merely stuck for a while is not a sleep.
 //! tao/Tauri expose no suspend notification, so this is the detection; it is checked with an injectable clock below.
 
 use serde::Serialize;
@@ -33,9 +34,19 @@ pub struct Slept {
 #[derive(Default)]
 pub struct SleepDetector {
     last: Option<Sample>,
+    /// True when the two clocks really differ (Unix): then only their difference counts, and a thread that merely stalled
+    /// for over 30 s (both clocks moved on together) is not taken as a sleep.
+    two_clocks: bool,
 }
 
 impl SleepDetector {
+    pub fn new(two_clocks: bool) -> Self {
+        SleepDetector {
+            last: None,
+            two_clocks,
+        }
+    }
+
     pub fn observe(&mut self, s: Sample) -> Option<Slept> {
         let prev = self.last.replace(s)?;
         let d_real = s.real_ms.saturating_sub(prev.real_ms);
@@ -46,7 +57,7 @@ impl SleepDetector {
                 at: prev.wall_ms,
                 slept_ms: drift,
             })
-        } else if d_real > STALL_MS {
+        } else if !self.two_clocks && d_real > STALL_MS {
             Some(Slept {
                 at: prev.wall_ms,
                 slept_ms: d_real,
@@ -71,6 +82,9 @@ fn clock_ms(id: libc::clockid_t) -> u64 {
         0
     }
 }
+
+/// True where `sample` reads two different clocks (an awake one and one that counts sleep).
+pub const HAS_TWO_CLOCKS: bool = cfg!(unix);
 
 /// The real clocks of this machine.
 pub struct SystemClocks {
@@ -192,6 +206,19 @@ mod tests {
         d.observe(s(0, 0, 7_000));
         let e = d.observe(s(120_000, 120_000, 127_000)).unwrap();
         assert_eq!((e.at, e.slept_ms), (7_000, 120_000));
+    }
+
+    #[test]
+    fn with_two_clocks_a_stalled_thread_is_not_a_sleep() {
+        let mut d = SleepDetector::new(true);
+        d.observe(s(0, 0, 7_000));
+        // the thread was stuck for 2 minutes but the machine stayed awake: both clocks moved together
+        assert_eq!(d.observe(s(120_000, 120_000, 127_000)), None);
+        // a real sleep is still seen
+        let e = d
+            .observe(s(122_000, 3_722_000, 127_000 + 3_602_000))
+            .unwrap();
+        assert_eq!(e.slept_ms, 3_600_000);
     }
 
     #[test]

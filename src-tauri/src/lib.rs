@@ -483,7 +483,7 @@ pub fn run() {
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let clocks = sleep::SystemClocks::new();
-                let mut detector = sleep::SleepDetector::default();
+                let mut detector = sleep::SleepDetector::new(sleep::HAS_TWO_CLOCKS);
                 detector.observe(clocks.sample());
                 loop {
                     std::thread::sleep(Duration::from_secs(3));
