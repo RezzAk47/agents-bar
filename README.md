@@ -93,7 +93,7 @@ Performance (macOS, synthetic, 300 files, 56 MB of Claude transcripts + Codex): 
 
 Based on [CLI-Usage](https://github.com/nimaansari/CLI-Usage) by Nima Ansari (MIT). Thank you, Nima.
 
-See `THIRD-PARTY-NOTICES.md` for the licences of the components this app uses, and for trademark notes (Claude, Codex, GitHub and Apple names are used only descriptively; no affiliation or endorsement).
+See `THIRD-PARTY-NOTICES.md` for the licences of the components this app uses (the full licence texts are in `THIRD-PARTY-LICENSES.txt`), and for trademark notes (Claude, Codex, GitHub and Apple names are used only descriptively; no affiliation or endorsement).
 
 
 ## Releasing

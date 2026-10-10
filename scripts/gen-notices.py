@@ -52,7 +52,7 @@ def main():
         f"Generated on {today} with `python3 scripts/gen-notices.py`, which runs `cargo metadata --locked --format-version 1 --filter-platform <target>` "
         "(from `src-tauri/Cargo.lock`) for each release target, follows normal and build dependencies only (no dev dependencies) from the app crate, "
         "and takes the union, one row per crate version. Targets: " + ", ".join(f"{t} ({per[t]} crates)" for t in TARGETS) +
-        ". The licence is the SPDX expression each crate declares. `cargo about` was not available, so no licence texts are collected here.", "",
+        ". The licence is the SPDX expression each crate declares. The full licence texts are in `THIRD-PARTY-LICENSES.txt` (built by `python3 scripts/gen-licenses.py`).", "",
         "Licences present: " + ", ".join(licences) + ".", "",
         "Notes:",
         "- Dual or multi licensed crates (`A OR B`) may be used under either option. This app uses them under the permissive",
@@ -68,8 +68,8 @@ def main():
     text = text[:a] + "\n".join(sec) + "\n" + text[b:]
     text = re.sub(r"This list was generated on .*?run `cargo about` or `cargo license` before a real release \(not run here\)\.",
                   "The frontend table was written on 2026-10-09 from the installed `node_modules` package files; the Rust section was regenerated on "
-                  f"{today} (see below). Each row lists the SPDX licence the package declares. It is not legal advice. Full licence texts are in each crate's source "
-                  "on crates.io; to produce a single file with every text, run `cargo about` before a real release (not run here).",
+                  f"{today} (see below). Each row lists the SPDX licence the package declares. It is not legal advice. The full licence texts of the Rust crates and the npm "
+                  "packages are in `THIRD-PARTY-LICENSES.txt` (built by `python3 scripts/gen-licenses.py`); a few crates ship no licence file and are listed at its end.",
                   text, flags=re.S)
     FILE.write_text(text)
     print(len(rows), per)

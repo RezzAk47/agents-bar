@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Builds THIRD-PARTY-LICENSES.txt: the full licence text of every Rust crate listed in THIRD-PARTY-NOTICES.md and of the
+npm runtime packages (package.json "dependencies" and what they depend on), grouped by identical text.
+
+Usage (from the repo root, with cargo on PATH and `npm ci` done):  python3 scripts/gen-licenses.py
+
+Rust: the crate list is the table in THIRD-PARTY-NOTICES.md (written by scripts/gen-notices.py). `cargo metadata --locked`
+gives each crate's manifest_path in the cargo registry; every LICENSE*, LICENCE*, COPYING*, UNLICENSE* and NOTICE* file in
+that crate's folder (and the manifest's `license-file`) is read. A crate offered under `A OR B` keeps the text of every
+licence file it ships. A crate that ships no licence file is listed at the end with its declared SPDX expression: its text
+is then not in this file and has to be taken from the project's repository.
+npm: the same file patterns in node_modules/<package>.
+Standard library only. Output is deterministic (sorted), so a rerun on the same lock files gives the same file.
+"""
+import json, pathlib, re, subprocess, sys
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+NOTICES = ROOT / "THIRD-PARTY-NOTICES.md"
+OUT = ROOT / "THIRD-PARTY-LICENSES.txt"
+PATTERN = re.compile(r"^(licen[cs]e|copying|unlicense|notice)([-_.].*)?$", re.I)
+
+
+def licence_files(folder, extra=()):
+    found = []
+    if folder.is_dir():
+        for p in sorted(folder.iterdir()):
+            if p.is_file() and PATTERN.match(p.name) and p.suffix.lower() != ".spdx":  # LICENSE.spdx is metadata, not a text
+                found.append(p)
+    for e in extra:
+        p = (folder / e)
+        if p.is_file() and p not in found:
+            found.append(p)
+    return found
+
+
+def normal(text):
+    return "\n".join(l.rstrip() for l in text.replace("\r\n", "\n").replace("\r", "\n").strip("\n").split("\n"))
+
+
+def read(p):
+    return normal(p.read_bytes().decode("utf-8", errors="replace"))
+
+
+def rust_crates():
+    rows = []
+    in_table = False
+    for line in NOTICES.read_text().splitlines():
+        if line.startswith("## Rust crates"):
+            in_table = True
+        elif line.startswith("## ") and in_table:
+            break
+        elif in_table and line.startswith("| ") and not line.startswith("| Crate") and not line.startswith("|---"):
+            name, ver, lic = [c.strip() for c in line.strip("|").split("|", 2)]
+            rows.append((name, ver, lic))
+    if not rows:
+        sys.exit("no crate table found in THIRD-PARTY-NOTICES.md")
+    out = subprocess.run(["cargo", "metadata", "--locked", "--format-version", "1",
+                          "--manifest-path", str(ROOT / "src-tauri" / "Cargo.toml")],
+                         check=True, capture_output=True, text=True).stdout
+    where = {(p["name"], p["version"]): p for p in json.loads(out)["packages"]}
+    res = []
+    for name, ver, lic in rows:
+        p = where.get((name, ver))
+        if p is None:
+            sys.exit(f"{name} {ver} is in the notices but not in Cargo.lock: rerun scripts/gen-notices.py")
+        folder = pathlib.Path(p["manifest_path"]).parent
+        extra = [p["license_file"]] if p.get("license_file") else []
+        res.append((f"{name} {ver}", lic, licence_files(folder, extra)))
+    return res
+
+
+def npm_packages():
+    pj = json.loads((ROOT / "package.json").read_text())
+    todo, seen, res = list(pj.get("dependencies", {})), set(), []
+    while todo:
+        name = todo.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        folder = ROOT / "node_modules" / name
+        meta = json.loads((folder / "package.json").read_text())
+        lic = meta.get("license") or "see package.json"
+        if not isinstance(lic, str):
+            lic = json.dumps(lic)
+        todo += list(meta.get("dependencies", {}))
+        res.append((f"npm:{name} {meta['version']}", lic, licence_files(folder)))
+    return sorted(res)
+
+
+def main():
+    items = rust_crates() + npm_packages()
+    groups = {}   # text -> list of "name version (file)"
+    missing = []
+    for label, lic, files in items:
+        if not files:
+            missing.append((label, lic))
+        for f in files:
+            groups.setdefault(read(f), []).append(f"{label}  [{f.name}]  ({lic})")
+    ordered = sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    bar = "=" * 78
+    out = [
+        "THIRD-PARTY LICENCES for Agents Bar (cross-platform)",
+        "",
+        "The full licence text of every Rust crate listed in THIRD-PARTY-NOTICES.md and of the npm packages bundled into the app",
+        "window. Identical texts are printed once, followed by the components that ship exactly that text (file name in square",
+        "brackets, declared SPDX licence in round brackets). Copyright lines differ between components, so a text that differs",
+        "only in its copyright line appears as its own group. Generated by scripts/gen-licenses.py.",
+        "",
+        f"{len(items)} components, {len(ordered)} distinct texts.",
+        "",
+    ]
+    for i, (text, who) in enumerate(ordered, 1):
+        out += [bar, f"LICENCE TEXT {i} of {len(ordered)}: used by {len(who)} file(s)", bar, ""]
+        out += [f"  - {w}" for w in sorted(set(who))]
+        out += ["", "-" * 78, text, ""]
+    if missing:
+        out += [bar, f"COMPONENTS WITH NO LICENCE FILE IN THEIR PUBLISHED PACKAGE ({len(missing)})", bar, "",
+                "These crates declare a licence in Cargo.toml but ship no licence file, so their text is not in this file.",
+                "Take it from the project's repository (the crate's page on crates.io links to it).", ""]
+        out += [f"  - {l}  ({s})" for l, s in sorted(missing)]
+        out += [""]
+    OUT.write_text("\n".join(out) + "\n")
+    print(f"{len(items)} components, {len(ordered)} distinct texts, {len(missing)} without a licence file")
+
+
+main()

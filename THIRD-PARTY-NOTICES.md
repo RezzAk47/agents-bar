@@ -4,7 +4,7 @@ Agents Bar (cross-platform) is MIT licensed (see `LICENSE`). It is built from th
 their copyright and licence notices travel with copies of the software, so **ship this file (or a copy of it) with every
 installer and release**, for example attach it to the GitHub Release and place it next to the app.
 
-The frontend table was written on 2026-10-09 from the installed `node_modules` package files; the Rust section was regenerated on 2026-10-10 (see below). Each row lists the SPDX licence the package declares. It is not legal advice. Full licence texts are in each crate's source on crates.io; to produce a single file with every text, run `cargo about` before a real release (not run here).
+The frontend table was written on 2026-10-09 from the installed `node_modules` package files; the Rust section was regenerated on 2026-10-10 (see below). Each row lists the SPDX licence the package declares. It is not legal advice. The full licence texts of the Rust crates and the npm packages are in `THIRD-PARTY-LICENSES.txt` (built by `python3 scripts/gen-licenses.py`); a few crates ship no licence file and are listed at its end.
 
 ## Frontend (bundled into the app window)
 
@@ -24,7 +24,7 @@ Development-only tools (Vite, Vitest, TypeScript, Playwright, the Tauri CLI) are
 
 ## Rust crates (compiled into the app binary), 400 in total
 
-Generated on 2026-10-10 with `python3 scripts/gen-notices.py`, which runs `cargo metadata --locked --format-version 1 --filter-platform <target>` (from `src-tauri/Cargo.lock`) for each release target, follows normal and build dependencies only (no dev dependencies) from the app crate, and takes the union, one row per crate version. Targets: aarch64-apple-darwin (269 crates), x86_64-apple-darwin (269 crates), x86_64-pc-windows-msvc (265 crates), x86_64-unknown-linux-gnu (347 crates). The licence is the SPDX expression each crate declares. `cargo about` was not available, so no licence texts are collected here.
+Generated on 2026-10-10 with `python3 scripts/gen-notices.py`, which runs `cargo metadata --locked --format-version 1 --filter-platform <target>` (from `src-tauri/Cargo.lock`) for each release target, follows normal and build dependencies only (no dev dependencies) from the app crate, and takes the union, one row per crate version. Targets: aarch64-apple-darwin (269 crates), x86_64-apple-darwin (269 crates), x86_64-pc-windows-msvc (265 crates), x86_64-unknown-linux-gnu (347 crates). The licence is the SPDX expression each crate declares. The full licence texts are in `THIRD-PARTY-LICENSES.txt` (built by `python3 scripts/gen-licenses.py`).
 
 Licences present: (MIT OR Apache-2.0) AND Unicode-3.0, 0BSD OR MIT OR Apache-2.0, Apache-2.0, Apache-2.0 / MIT, Apache-2.0 AND MIT, Apache-2.0 OR MIT, Apache-2.0 WITH LLVM-exception, Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT, Apache-2.0/MIT, BSD-2-Clause OR Apache-2.0 OR MIT, BSD-3-Clause, BSD-3-Clause AND MIT, BSD-3-Clause OR Apache-2.0, BSD-3-Clause/MIT, CC0-1.0 OR MIT-0 OR Apache-2.0, ISC, MIT, MIT OR Apache-2.0, MIT OR Apache-2.0 OR Zlib, MIT OR Zlib OR Apache-2.0, MIT/Apache-2.0, MPL-2.0, Unicode-3.0, Unlicense OR MIT, Unlicense/MIT, Zlib, Zlib OR Apache-2.0 OR MIT.
 
