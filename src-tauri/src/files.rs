@@ -400,8 +400,21 @@ pub fn write(
 ) -> Result<(), String> {
     let p = resolve(dir, name)?;
     fs::create_dir_all(dir).map_err(|e| format!("cannot create the data folder: {e}"))?;
-    let target = plan_target(&p, name)?; // refuses before any file (even the lock file) is created
-    let _lock = Lock::take(&target.path);
+    let mut target = plan_target(&p, name)?; // refuses before any file (even the lock file) is created
+    #[cfg(test)]
+    tests::run_before_lock_hook();
+    let mut _lock = Lock::take(&target.path);
+    // The plan was made before the lock: another writer (the other app instance, tick.py, an editor's save) may have replaced
+    // the file since, and `still_same` would then refuse a write that is perfectly fine. Plan again while holding the lock.
+    for _ in 0..3 {
+        let again = plan_target(&p, name)?;
+        let same_place = again.path == target.path;
+        target = again;
+        if same_place {
+            break;
+        }
+        _lock = Lock::take(&target.path);
+    }
     if let Some(expected) = check {
         let current = fs::metadata(&p).ok().map(|m| stamp_of(&m));
         if current != expected {
@@ -494,6 +507,37 @@ pub fn move_aside(dir: &Path, name: &str, backup: &str) -> Result<String, String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+
+    thread_local! {
+        static BEFORE_LOCK: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
+    }
+    /// Test hook: runs once, between planning a write and taking its lock (where a second writer can get in).
+    pub(super) fn run_before_lock_hook() {
+        if let Some(f) = BEFORE_LOCK.with(|h| h.borrow_mut().take()) {
+            f();
+        }
+    }
+
+    #[test]
+    fn a_file_replaced_by_another_writer_after_the_plan_does_not_make_the_write_fail() {
+        let d = tempfile::tempdir().unwrap();
+        let data = d.path().join("data");
+        write(&data, "notified.json", "{\"ids\":{}}\n", None).unwrap();
+        let (dir, tmp) = (data.clone(), d.path().join("other-writer.tmp"));
+        BEFORE_LOCK.with(|h| {
+            *h.borrow_mut() = Some(Box::new(move || {
+                // an atomic replace by someone else: a new file (new inode, new size) under the same name
+                fs::write(&tmp, "{\"ids\":{\"theirs\":1}}\n").unwrap();
+                fs::rename(&tmp, dir.join("notified.json")).unwrap();
+            }));
+        });
+        write(&data, "notified.json", "{\"ids\":{\"ours\":2}}\n", None).unwrap();
+        assert_eq!(
+            read(&data, "notified.json").unwrap().as_deref(),
+            Some("{\"ids\":{\"ours\":2}}\n")
+        );
+    }
 
     #[test]
     fn names_are_checked() {
