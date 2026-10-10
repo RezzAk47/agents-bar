@@ -183,10 +183,7 @@ fn files_in(
             break;
         }
         *budget -= 1;
-        let name = e.file_name();
-        // the prefix and suffix are ASCII, so a lossy view is enough to match; the real OsString path is what gets opened
-        let name = name.to_string_lossy();
-        if !name.starts_with(prefix) || !name.ends_with(".jsonl") {
+        if !is_transcript_name(&e.file_name(), prefix) {
             continue;
         }
         let Ok(m) = fs::symlink_metadata(e.path()) else {
@@ -204,6 +201,21 @@ fn files_in(
             });
         }
     }
+}
+
+/// Does this file name look like `<prefix>*.jsonl`? The prefix and suffix are ASCII, so a lossy view is enough to match (a
+/// non-UTF-8 name keeps its ASCII parts); the real OsString path is what gets opened.
+fn is_transcript_name(name: &std::ffi::OsStr, prefix: &str) -> bool {
+    let name = name.to_string_lossy();
+    name.starts_with(prefix) && name.ends_with(".jsonl")
+}
+
+/// The real path behind the (possibly lossy) text the page was given. Pure, so it is tested with paths built in memory.
+fn real_path_for<'a>(paths: impl IntoIterator<Item = &'a PathBuf>, shown: &str) -> Option<PathBuf> {
+    paths
+        .into_iter()
+        .find(|p| p.to_string_lossy() == shown)
+        .cloned()
 }
 
 fn cap_newest(mut v: Vec<Known>) -> Vec<Known> {
@@ -286,10 +298,7 @@ impl Scanner {
     /// The real path (which may not be UTF-8) behind a path string the page was given. The page sees non-UTF-8 names in their
     /// lossy form, so that form is what is compared; the real path is what gets opened or revealed.
     pub fn known_path(&self, path: &str) -> Option<PathBuf> {
-        self.known
-            .iter()
-            .find(|k| k.path.to_string_lossy() == path)
-            .map(|k| k.path.clone())
+        real_path_for(self.known.iter().map(|k| &k.path), path)
     }
 
     /// One call. `rediscover` runs the folder walk; otherwise only the known files are looked at (one stat each).
@@ -1316,7 +1325,8 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let real = dir.join(OsStr::from_bytes(b"agent-\xff\xfe.jsonl"));
         if fs::write(&real, line(1, "")).is_err() {
-            return; // this file system refuses such names
+            // this file system refuses such names (APFS); lossy_text_maps_back_to_the_real_non_utf8_path covers the logic
+            return;
         }
         let mut s = Scanner::new(cl, d.path().join("none"));
         let r = s.scan(now_ms(), true);
@@ -1331,6 +1341,44 @@ mod tests {
             "the real path is what opens"
         );
         assert_eq!(s.known_path("/etc/passwd"), None);
+    }
+
+    /// The same mapping with no file system involved: APFS refuses non-UTF-8 names, so on a Mac this is the test that runs.
+    #[cfg(unix)]
+    #[test]
+    fn lossy_text_maps_back_to_the_real_non_utf8_path() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let real =
+            Path::new("/h/c/-p/s/subagents").join(OsStr::from_bytes(b"agent-\xff\xfe.jsonl"));
+        let other = PathBuf::from("/h/c/-p/s/subagents/agent-b.jsonl");
+        let listing = vec![other.clone(), real.clone()];
+        let shown = real.to_string_lossy().into_owned();
+        assert!(shown.contains('\u{FFFD}'), "{shown}");
+        assert_eq!(real_path_for(&listing, &shown), Some(real.clone()));
+        assert_eq!(
+            real_path_for(&listing, other.to_str().unwrap()),
+            Some(other)
+        );
+        assert_eq!(real_path_for(&listing, "/etc/passwd"), None);
+        // text that merely looks similar (U+FFFD replaced) is not a known path
+        assert_eq!(
+            real_path_for(&listing, &shown.replace('\u{FFFD}', "x")),
+            None
+        );
+        // the name filter sees the ASCII parts of a non-UTF-8 name
+        assert!(is_transcript_name(
+            OsStr::from_bytes(b"agent-\xff\xfe.jsonl"),
+            "agent-"
+        ));
+        assert!(!is_transcript_name(
+            OsStr::from_bytes(b"agent-\xff\xfe.txt"),
+            "agent-"
+        ));
+        assert!(!is_transcript_name(
+            OsStr::from_bytes(b"\xffgent-a.jsonl"),
+            "agent-"
+        ));
     }
 
     #[test]
