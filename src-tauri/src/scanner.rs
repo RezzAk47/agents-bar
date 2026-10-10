@@ -132,8 +132,22 @@ fn is_real_dir(p: &Path) -> bool {
     fs::symlink_metadata(p).map(|m| m.is_dir()).unwrap_or(false)
 }
 
-fn sub_dirs(dir: &Path, budget: &mut usize) -> Vec<PathBuf> {
-    let Ok(rd) = fs::read_dir(dir) else {
+/// A folder that is not there (or is not a folder) is simply empty; any other error (access denied, an I/O hiccup, a
+/// sharing violation) may pass in a moment, so the folder is noted in `failed` and keeps what it held at the last walk.
+fn read_dir_noting(dir: &Path, failed: &mut Vec<PathBuf>) -> Option<fs::ReadDir> {
+    match fs::read_dir(dir) {
+        Ok(rd) => Some(rd),
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound && !dir.is_file() {
+                failed.push(dir.to_path_buf());
+            }
+            None
+        }
+    }
+}
+
+fn sub_dirs(dir: &Path, budget: &mut usize, failed: &mut Vec<PathBuf>) -> Vec<PathBuf> {
+    let Some(rd) = read_dir_noting(dir, failed) else {
         return vec![];
     };
     let mut out = vec![];
@@ -156,11 +170,14 @@ fn files_in(
     now: i64,
     out: &mut Vec<Known>,
     kind: Kind,
+    failed: &mut Vec<PathBuf>,
 ) {
     if !is_real_dir(dir) {
         return; // a symlinked `subagents` folder (or a missing one) is not read
     }
-    let Ok(rd) = fs::read_dir(dir) else { return };
+    let Some(rd) = read_dir_noting(dir, failed) else {
+        return;
+    };
     for e in rd.flatten() {
         if *budget == 0 {
             break;
@@ -214,9 +231,10 @@ impl Scanner {
     /// The full folder walk (the costly part): claude `<root>/*/*/subagents/agent-*.jsonl`, codex `<root>/*/*/*/rollout-*.jsonl`.
     fn discover(&mut self, now: i64) {
         let mut budget = MAX_WALK_ENTRIES;
+        let mut failed: Vec<PathBuf> = vec![];
         let mut claude = vec![];
-        for project in sub_dirs(&self.claude_root, &mut budget) {
-            for session in sub_dirs(&project, &mut budget) {
+        for project in sub_dirs(&self.claude_root, &mut budget, &mut failed) {
+            for session in sub_dirs(&project, &mut budget, &mut failed) {
                 files_in(
                     &session.join("subagents"),
                     "agent-",
@@ -224,14 +242,32 @@ impl Scanner {
                     now,
                     &mut claude,
                     Kind::Claude,
+                    &mut failed,
                 );
             }
         }
         let mut codex = vec![];
-        for y in sub_dirs(&self.codex_root, &mut budget) {
-            for m in sub_dirs(&y, &mut budget) {
-                for d in sub_dirs(&m, &mut budget) {
-                    files_in(&d, "rollout-", &mut budget, now, &mut codex, Kind::Codex);
+        for y in sub_dirs(&self.codex_root, &mut budget, &mut failed) {
+            for m in sub_dirs(&y, &mut budget, &mut failed) {
+                for d in sub_dirs(&m, &mut budget, &mut failed) {
+                    files_in(
+                        &d,
+                        "rollout-",
+                        &mut budget,
+                        now,
+                        &mut codex,
+                        Kind::Codex,
+                        &mut failed,
+                    );
+                }
+            }
+        }
+        // a folder that could not be read for a moment keeps the files it held at the last walk, until the next walk
+        for old in &self.known {
+            if failed.iter().any(|f| old.path.starts_with(f)) {
+                match old.kind {
+                    Kind::Claude => claude.push(old.clone()),
+                    Kind::Codex => codex.push(old.clone()),
                 }
             }
         }
@@ -1296,6 +1332,38 @@ mod tests {
             after.files.is_empty(),
             "and it is not read from the start again"
         );
+    }
+
+    /// A folder that cannot be read for a moment (access denied, an I/O hiccup) keeps its files until the next walk instead of
+    /// emptying the list.
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_that_cannot_be_read_for_a_moment_keeps_its_files_across_a_walk() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let cl = d.path().join("c");
+        let p = claude_dir(&cl, "-p", "s", "agent-a.jsonl", &line(1, ""));
+        claude_dir(&cl, "-q", "s", "agent-b.jsonl", &line(1, ""));
+        let mut s = Scanner::new(cl.clone(), d.path().join("none"));
+        assert_eq!(s.scan(now_ms(), true).known.len(), 2);
+        for victim in [cl.clone(), cl.join("-p")] {
+            fs::set_permissions(&victim, fs::Permissions::from_mode(0o000)).unwrap();
+            if fs::read_dir(&victim).is_ok() {
+                fs::set_permissions(&victim, fs::Permissions::from_mode(0o755)).unwrap();
+                return; // running as root: the error cannot be made
+            }
+            let during = s.scan(now_ms(), true);
+            fs::set_permissions(&victim, fs::Permissions::from_mode(0o755)).unwrap();
+            assert_eq!(
+                during.known.len(),
+                2,
+                "{}: nothing dropped",
+                victim.display()
+            );
+        }
+        // a folder that is really gone still empties
+        fs::remove_dir_all(p.parent().unwrap().parent().unwrap().parent().unwrap()).unwrap();
+        assert_eq!(s.scan(now_ms(), true).known.len(), 1);
     }
 
     #[test]
