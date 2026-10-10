@@ -164,13 +164,12 @@ describe('AgentScanner (incremental state per file)', () => {
 
 describe('one tick never keeps the page busy for long', () => {
   it('stops reading rounds after the time budget and reports an incomplete pass', async () => {
-    let calls = 0;
-    const slow = { async scan() { calls++; await new Promise((r) => setTimeout(r, 400)); return { files: [], known: [], more: true }; } };
-    const sc = new AgentScanner(slow);
-    const t0 = performance.now(); // monotonic: a wall-clock adjustment during the test must not matter
+    // a fake clock: every read "takes" 400 ms, so the 1500 ms budget allows exactly four rounds, on any machine
+    let calls = 0, t = 0;
+    const slow = { async scan() { calls++; t += 400; return { files: [], known: [], more: true }; } };
+    const sc = new AgentScanner(slow, () => t);
     await sc.scan(NOW, true);
-    expect(performance.now() - t0).toBeLessThan(3500);
-    expect(calls).toBeLessThanOrEqual(5);
+    expect(calls).toBe(4);
     expect(sc.complete).toBe(false);
   });
 });
