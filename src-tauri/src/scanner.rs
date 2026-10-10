@@ -257,9 +257,15 @@ impl Scanner {
         let mut gone = vec![];
         let known = self.known.clone();
         for k in &known {
-            let Ok(m) = fs::symlink_metadata(&k.path) else {
-                gone.push(k.path.clone());
-                continue;
+            let m = match fs::symlink_metadata(&k.path) {
+                Ok(m) => m,
+                // only a file that is really not there is gone; access denied or a sharing violation (a virus scanner, an
+                // indexer) lasts a moment, and the file must not vanish from the list or be read again from the start
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    gone.push(k.path.clone());
+                    continue;
+                }
+                Err(_) => continue,
             };
             if !m.is_file() {
                 gone.push(k.path.clone());
@@ -1262,6 +1268,47 @@ mod tests {
         s.scan(now_ms(), true);
         fs::remove_file(&p).unwrap();
         assert!(s.scan(now_ms(), false).known.is_empty());
+    }
+
+    /// A file a virus scanner or indexer holds for a moment (Windows: access denied / sharing violation) is not a file that is
+    /// gone. On Unix the same error is made with a folder that cannot be searched.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_that_cannot_be_looked_at_for_a_moment_stays_known() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let cl = d.path().join("c");
+        let p = claude_dir(&cl, "-p", "s", "agent-a.jsonl", &line(1, ""));
+        let mut s = Scanner::new(cl, d.path().join("none"));
+        assert_eq!(s.scan(now_ms(), true).known.len(), 1);
+        let dir = p.parent().unwrap().to_path_buf();
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o000)).unwrap();
+        if fs::symlink_metadata(&p).is_ok() {
+            fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+            return; // running as root: the error cannot be made
+        }
+        let during = s.scan(now_ms(), false);
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(during.known.len(), 1, "a momentary error is not 'gone'");
+        let after = s.scan(now_ms(), false);
+        assert_eq!(after.known.len(), 1);
+        assert!(
+            after.files.is_empty(),
+            "and it is not read from the start again"
+        );
+    }
+
+    #[test]
+    fn windows_line_endings_read_like_unix_ones() {
+        let body = format!("{}{}", line(1, ""), line(2, "")).replace('\n', "\r\n");
+        let (recs, off, _, _) = read_lines_t(
+            Cursor::new(body.clone().into_bytes()),
+            0,
+            Kind::Claude,
+            u64::MAX,
+        );
+        assert_eq!(recs.len(), 2);
+        assert_eq!(off as usize, body.len());
     }
 
     #[test]
