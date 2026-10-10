@@ -1,0 +1,35 @@
+{
+  "name": "agents-bar-cross",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Agents Bar for Windows, Linux and macOS (Tauri tray app): running and finished Claude Code and Codex agents plus GitHub repos with CI status.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "shots": "node scripts/screenshots.mjs",
+    "ui:smoke": "node scripts/ui-smoke.mjs",
+    "tauri": "tauri",
+    "perf": "node scripts/perf.mjs",
+    "privacy": "node scripts/canary.mjs",
+    "privacy:negative": "node scripts/canary-negative.mjs",
+    "ui:overflow": "node scripts/overflow.mjs",
+    "ui:overflow:negative": "node scripts/overflow-negative.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.12.1",
+    "@tauri-apps/plugin-autostart": "2.7.0",
+    "preact": "11.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@tauri-apps/cli": "2.12.1",
+    "@types/node": "26.6.4",
+    "typescript": "7.0.2",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  }
+}

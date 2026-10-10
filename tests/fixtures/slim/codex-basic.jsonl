@@ -1,0 +1,14 @@
+{"payload":{"type":"task_started"},"timestamp":"2025-10-09T08:53:20.000Z","type":"event_msg"}
+{"payload":{"content":[{}],"role":"user","type":"message"},"timestamp":"2025-10-09T08:53:20.000Z","type":"response_item"}
+{"payload":{"content":[{"text":"Fix the checkout test"}],"role":"user","type":"message"},"timestamp":"2025-10-09T08:53:20.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_0","name":"shell","type":"function_call"},"timestamp":"2025-10-09T08:53:25.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_0","type":"function_call_output"},"timestamp":"2025-10-09T08:53:30.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_1","name":"shell","type":"function_call"},"timestamp":"2025-10-09T08:53:35.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_1","type":"function_call_output"},"timestamp":"2025-10-09T08:53:40.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_2","name":"shell","type":"function_call"},"timestamp":"2025-10-09T08:53:45.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_2","type":"function_call_output"},"timestamp":"2025-10-09T08:53:50.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_3","name":"shell","type":"function_call"},"timestamp":"2025-10-09T08:53:55.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_3","type":"function_call_output"},"timestamp":"2025-10-09T08:54:00.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_4","name":"shell","type":"function_call"},"timestamp":"2025-10-09T08:54:05.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_4","type":"function_call_output"},"timestamp":"2025-10-09T08:54:10.000Z","type":"response_item"}
+{"payload":{"type":"task_complete"},"timestamp":"2025-10-09T08:54:15.000Z","type":"event_msg"}

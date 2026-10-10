@@ -1,0 +1,15 @@
+{"payload":{"type":"task_started"},"timestamp":"2025-10-09T08:53:20.000Z","type":"event_msg"}
+{"payload":{"content":[{}],"role":"user","type":"message"},"timestamp":"2025-10-09T08:53:20.000Z","type":"response_item"}
+{"payload":{"content":[{"text":"Synthetic codex task"}],"role":"user","type":"message"},"timestamp":"2025-10-09T08:53:20.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_0","name":"shell","type":"function_call"},"timestamp":"2025-10-09T08:53:25.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_0","type":"function_call_output"},"timestamp":"2025-10-09T08:53:30.000Z","type":"response_item"}
+{"payload":{"info":{"total_token_usage":{"cached_input_tokens":150,"input_tokens":250,"output_tokens":13}},"type":"token_count"},"timestamp":"2025-10-09T08:53:30.000Z","type":"event_msg"}
+{"payload":{"call_id":"call_1760000000_1","name":"shell","type":"function_call"},"timestamp":"2025-10-09T08:53:35.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_1","type":"function_call_output"},"timestamp":"2025-10-09T08:53:40.000Z","type":"response_item"}
+{"payload":{"info":{"total_token_usage":{"cached_input_tokens":300,"input_tokens":500,"output_tokens":25}},"type":"token_count"},"timestamp":"2025-10-09T08:53:40.000Z","type":"event_msg"}
+{"payload":{"call_id":"call_1760000000_2","name":"shell","type":"function_call"},"timestamp":"2025-10-09T08:53:45.000Z","type":"response_item"}
+{"payload":{"call_id":"call_1760000000_2","type":"function_call_output"},"timestamp":"2025-10-09T08:53:50.000Z","type":"response_item"}
+{"payload":{"info":{"total_token_usage":{"cached_input_tokens":450,"input_tokens":750,"output_tokens":38}},"type":"token_count"},"timestamp":"2025-10-09T08:53:50.000Z","type":"event_msg"}
+{"payload":{"call_id":"call_1760000000_3","name":"shell","type":"function_call"},"timestamp":"2025-10-09T08:53:55.000Z","type":"response_item"}
+{"payload":{"info":{"total_token_usage":{"cached_input_tokens":600,"input_tokens":1000,"output_tokens":50}},"type":"token_count"},"timestamp":"2025-10-09T08:53:55.000Z","type":"event_msg"}
+{"payload":{"content":[{"text":"PROGRESS: 70% - almost there"}],"role":"assistant","type":"message"},"timestamp":"2025-10-09T08:54:00.000Z","type":"response_item"}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reveal-transcript"
+description = "Enables the reveal_transcript command without any pre-configured scope."
+commands.allow = ["reveal_transcript"]
+
+[[permission]]
+identifier = "deny-reveal-transcript"
+description = "Denies the reveal_transcript command without any pre-configured scope."
+commands.deny = ["reveal_transcript"]

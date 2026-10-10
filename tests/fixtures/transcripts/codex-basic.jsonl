@@ -1,0 +1,14 @@
+{"timestamp":"2025-10-09T08:53:20.000Z","type":"event_msg","payload":{"type":"task_started"}}
+{"timestamp":"2025-10-09T08:53:20.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>cwd</environment_context>"}]}}
+{"timestamp":"2025-10-09T08:53:20.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Fix the checkout test"}]}}
+{"timestamp":"2025-10-09T08:53:25.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","call_id":"call_1760000000_0","arguments":"{}"}}
+{"timestamp":"2025-10-09T08:53:30.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1760000000_0","output":"ok"}}
+{"timestamp":"2025-10-09T08:53:35.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","call_id":"call_1760000000_1","arguments":"{}"}}
+{"timestamp":"2025-10-09T08:53:40.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1760000000_1","output":"ok"}}
+{"timestamp":"2025-10-09T08:53:45.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","call_id":"call_1760000000_2","arguments":"{}"}}
+{"timestamp":"2025-10-09T08:53:50.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1760000000_2","output":"ok"}}
+{"timestamp":"2025-10-09T08:53:55.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","call_id":"call_1760000000_3","arguments":"{}"}}
+{"timestamp":"2025-10-09T08:54:00.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1760000000_3","output":"ok"}}
+{"timestamp":"2025-10-09T08:54:05.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","call_id":"call_1760000000_4","arguments":"{}"}}
+{"timestamp":"2025-10-09T08:54:10.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1760000000_4","output":"ok"}}
+{"timestamp":"2025-10-09T08:54:15.000Z","type":"event_msg","payload":{"type":"task_complete"}}

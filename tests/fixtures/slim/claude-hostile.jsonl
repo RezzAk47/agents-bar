@@ -1,0 +1,6 @@
+{"timestamp":"2025-10-09T08:53:20.000Z","type":"assistant"}
+{"message":{"usage":{"input_tokens":"x","output_tokens":-4}},"timestamp":"2025-10-09T08:53:21.000Z","type":"assistant"}
+{"message":{"content":[{"text":"PROGRESS: 150% - capped‮","type":"text"},{"type":"tool_use"}],"id":"m1","usage":{"cache_read_input_tokens":2.5,"input_tokens":1e+40,"output_tokens":7}},"timestamp":"nope","type":"assistant"}
+{"message":{"content":[{"type":"tool_result"},{"tool_use_id":"unknown","type":"tool_result"}]},"timestamp":"2025-10-09T08:53:22.000Z","type":"user"}
+{"message":{"content":[{"id":"t1","name":"Read","type":"tool_use"}],"usage":{"input_tokens":3,"output_tokens":4}},"requestId":"r9","timestamp":"2025-10-09T08:53:23.000Z","type":"assistant"}
+{"message":{"content":[],"usage":{"input_tokens":3,"output_tokens":9}},"requestId":"r9","timestamp":"2025-10-09T08:53:24.000Z","type":"assistant"}

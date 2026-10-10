@@ -1,0 +1,39 @@
+[package]
+name = "agents-bar-cross"
+version = "0.1.0"
+description = "Agents Bar for Windows, Linux and macOS: a tray app showing running and finished Claude Code and Codex agents and GitHub CI status."
+edition = "2021"
+rust-version = "1.90"
+publish = false
+license = "MIT"
+
+[lib]
+name = "agents_bar_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

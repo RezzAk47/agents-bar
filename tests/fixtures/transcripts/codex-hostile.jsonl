@@ -1,0 +1,7 @@
+{"type":"event_msg","payload":5}
+{"timestamp":"2025-10-09T08:53:20.000Z","type":"response_item","payload":{"type":"function_call","call_id":[1],"name":5,"action":3}}
+{"timestamp":"2025-10-09T08:53:21.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions for x"},{"type":"input_text","text":"blah <INSTRUCTIONS> blah"},{"type":"input_text","text":"  Real prompt ‮ with   spaces  "}]}}
+{"timestamp":"2025-10-09T08:53:22.000Z","type":"response_item","payload":{"type":"local_shell_call","call_id":"c1","action":{"type":"exec"}}}
+{"timestamp":"2025-10-09T08:53:23.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":"x"}}}}
+{"timestamp":"2025-10-09T08:53:24.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":90,"cached_input_tokens":120,"output_tokens":5,"cache_write_input_tokens":7}}}}
+{"timestamp":"2025-10-09T08:53:25.000Z","type":"event_msg","payload":{"type":"turn_aborted"}}

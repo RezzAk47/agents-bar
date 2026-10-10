@@ -1,0 +1,8 @@
+{"message":{"content":[{"type":"text"}]},"timestamp":"2025-10-09T08:53:20.000Z","type":"user"}
+{"message":{"content":[{"id":"toolu_1760000000_0","name":"Bash","type":"tool_use"}],"id":"msg_1760000000_0"},"requestId":"req_1760000000_0","timestamp":"2025-10-09T08:53:25.000Z","type":"assistant"}
+{"message":{"content":[{"tool_use_id":"toolu_1760000000_0","type":"tool_result"}]},"timestamp":"2025-10-09T08:53:30.000Z","type":"user"}
+{"message":{"content":[{"id":"toolu_1760000000_1","name":"Bash","type":"tool_use"}],"id":"msg_1760000000_1"},"requestId":"req_1760000000_1","timestamp":"2025-10-09T08:53:35.000Z","type":"assistant"}
+{"message":{"content":[{"tool_use_id":"toolu_1760000000_1","type":"tool_result"}]},"timestamp":"2025-10-09T08:53:40.000Z","type":"user"}
+{"message":{"content":[{"id":"toolu_1760000000_2","name":"Bash","type":"tool_use"}],"id":"msg_1760000000_2"},"requestId":"req_1760000000_2","timestamp":"2025-10-09T08:53:45.000Z","type":"assistant"}
+{"message":{"content":[{"tool_use_id":"toolu_1760000000_2","type":"tool_result"}]},"timestamp":"2025-10-09T08:53:50.000Z","type":"user"}
+{"message":{"content":[{"text":"PROGRESS: 40% - running the suite","type":"text"},{"id":"toolu_1760000000_3","name":"Bash","type":"tool_use"}],"id":"msg_1760000000_3"},"requestId":"req_1760000000_3","timestamp":"2025-10-09T08:53:55.000Z","type":"assistant"}

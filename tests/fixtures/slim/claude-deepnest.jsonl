@@ -1,0 +1,2 @@
+{"message":{"content":[{"id":"t1","name":"Bash","type":"tool_use"}],"id":"m1"},"timestamp":"2025-10-09T08:53:21.000Z","type":"assistant"}
+{"message":{"content":[{"id":"t2","name":"Bash","type":"tool_use"}],"id":"m2"},"timestamp":"2025-10-09T08:53:22.000Z","type":"assistant"}

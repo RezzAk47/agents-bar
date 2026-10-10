@@ -1,0 +1,7 @@
+{"type":"event_msg"}
+{"payload":{"name":true,"type":"function_call"},"timestamp":"2025-10-09T08:53:20.000Z","type":"response_item"}
+{"payload":{"content":[{},{},{"text":"Real prompt ‮ with spaces"}],"role":"user","type":"message"},"timestamp":"2025-10-09T08:53:21.000Z","type":"response_item"}
+{"payload":{"action":{"type":"exec"},"call_id":"c1","type":"local_shell_call"},"timestamp":"2025-10-09T08:53:22.000Z","type":"response_item"}
+{"payload":{"info":{"total_token_usage":{"input_tokens":"x"}},"type":"token_count"},"timestamp":"2025-10-09T08:53:23.000Z","type":"event_msg"}
+{"payload":{"info":{"total_token_usage":{"cache_write_input_tokens":7,"cached_input_tokens":120,"input_tokens":90,"output_tokens":5}},"type":"token_count"},"timestamp":"2025-10-09T08:53:24.000Z","type":"event_msg"}
+{"payload":{"type":"turn_aborted"},"timestamp":"2025-10-09T08:53:25.000Z","type":"event_msg"}

@@ -1,0 +1,12 @@
+[]
+"str"
+5
+null
+not json at all
+
+{"type":"assistant","timestamp":"2025-10-09T08:53:20.000Z","message":5}
+{"type":"assistant","timestamp":"2025-10-09T08:53:21.000Z","message":{"content":"x","usage":{"input_tokens":"x","output_tokens":-4}}}
+{"type":"assistant","timestamp":"nope","message":{"id":"m1","usage":{"input_tokens":1e+40,"output_tokens":7,"cache_read_input_tokens":2.5},"content":[5,null,{"type":"text","text":"Progress: 100% fine\nPROGRESS: 150% - capped‮"},{"type":"tool_use","id":["x"],"name":9}]}}
+{"type":"user","timestamp":"2025-10-09T08:53:22.000Z","message":{"content":[5,{"type":"tool_result","tool_use_id":[1]},{"type":"tool_result","tool_use_id":"unknown"}]}}
+{"type":"assistant","timestamp":"2025-10-09T08:53:23.000Z","requestId":"r9","message":{"usage":{"input_tokens":3,"output_tokens":4},"content":[{"type":"tool_use","id":"t1","name":"Read"}]}}
+{"type":"assistant","timestamp":"2025-10-09T08:53:24.000Z","requestId":"r9","message":{"usage":{"input_tokens":3,"output_tokens":9},"content":[]}}

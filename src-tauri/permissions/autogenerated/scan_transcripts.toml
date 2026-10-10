@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-scan-transcripts"
+description = "Enables the scan_transcripts command without any pre-configured scope."
+commands.allow = ["scan_transcripts"]
+
+[[permission]]
+identifier = "deny-scan-transcripts"
+description = "Denies the scan_transcripts command without any pre-configured scope."
+commands.deny = ["scan_transcripts"]
