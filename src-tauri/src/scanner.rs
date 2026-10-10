@@ -103,11 +103,18 @@ pub struct Scanner {
 }
 
 pub fn now_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 fn mtime_of(m: &Metadata) -> i64 {
-    m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as i64).unwrap_or(0)
+    m.modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 #[cfg(unix)]
@@ -126,7 +133,9 @@ fn is_real_dir(p: &Path) -> bool {
 }
 
 fn sub_dirs(dir: &Path, budget: &mut usize) -> Vec<PathBuf> {
-    let Ok(rd) = fs::read_dir(dir) else { return vec![] };
+    let Ok(rd) = fs::read_dir(dir) else {
+        return vec![];
+    };
     let mut out = vec![];
     for e in rd.flatten() {
         if *budget == 0 {
@@ -140,7 +149,14 @@ fn sub_dirs(dir: &Path, budget: &mut usize) -> Vec<PathBuf> {
     out
 }
 
-fn files_in(dir: &Path, prefix: &str, budget: &mut usize, now: i64, out: &mut Vec<Known>, kind: Kind) {
+fn files_in(
+    dir: &Path,
+    prefix: &str,
+    budget: &mut usize,
+    now: i64,
+    out: &mut Vec<Known>,
+    kind: Kind,
+) {
     if !is_real_dir(dir) {
         return; // a symlinked `subagents` folder (or a missing one) is not read
     }
@@ -155,26 +171,44 @@ fn files_in(dir: &Path, prefix: &str, budget: &mut usize, now: i64, out: &mut Ve
         if !name.starts_with(prefix) || !name.ends_with(".jsonl") {
             continue;
         }
-        let Ok(m) = fs::symlink_metadata(e.path()) else { continue };
+        let Ok(m) = fs::symlink_metadata(e.path()) else {
+            continue;
+        };
         if !m.is_file() {
             continue; // a symlink, FIFO or anything odd is not read
         }
         let mt = mtime_of(&m);
         if now - mt <= LOOKBACK_MS {
-            out.push(Known { path: e.path(), kind, mtime_ms: mt });
+            out.push(Known {
+                path: e.path(),
+                kind,
+                mtime_ms: mt,
+            });
         }
     }
 }
 
 fn cap_newest(mut v: Vec<Known>) -> Vec<Known> {
-    v.sort_by(|a, b| b.mtime_ms.cmp(&a.mtime_ms).then_with(|| a.path.cmp(&b.path)));
+    v.sort_by(|a, b| {
+        b.mtime_ms
+            .cmp(&a.mtime_ms)
+            .then_with(|| a.path.cmp(&b.path))
+    });
     v.truncate(MAX_FILES);
     v
 }
 
 impl Scanner {
     pub fn new(claude_root: PathBuf, codex_root: PathBuf) -> Scanner {
-        Scanner { claude_root, codex_root, known: vec![], states: HashMap::new(), walked: false, file_budget: FILE_BUDGET, call_budget: CALL_BUDGET }
+        Scanner {
+            claude_root,
+            codex_root,
+            known: vec![],
+            states: HashMap::new(),
+            walked: false,
+            file_budget: FILE_BUDGET,
+            call_budget: CALL_BUDGET,
+        }
     }
 
     /// The full folder walk (the costly part): claude `<root>/*/*/subagents/agent-*.jsonl`, codex `<root>/*/*/*/rollout-*.jsonl`.
@@ -183,7 +217,14 @@ impl Scanner {
         let mut claude = vec![];
         for project in sub_dirs(&self.claude_root, &mut budget) {
             for session in sub_dirs(&project, &mut budget) {
-                files_in(&session.join("subagents"), "agent-", &mut budget, now, &mut claude, Kind::Claude);
+                files_in(
+                    &session.join("subagents"),
+                    "agent-",
+                    &mut budget,
+                    now,
+                    &mut claude,
+                    Kind::Claude,
+                );
             }
         }
         let mut codex = vec![];
@@ -246,10 +287,23 @@ impl Scanner {
             }
         }
         // forget the state of files that are no longer known
-        let live: std::collections::HashSet<&PathBuf> = self.known.iter().map(|k| &k.path).collect();
+        let live: std::collections::HashSet<&PathBuf> =
+            self.known.iter().map(|k| &k.path).collect();
         self.states.retain(|p, _| live.contains(p));
-        let known_out = self.known.iter().map(|k| KnownOut { path: k.path.to_string_lossy().into_owned(), kind: k.kind, mtime_ms: k.mtime_ms as f64 }).collect();
-        Reply { files, known: known_out, more }
+        let known_out = self
+            .known
+            .iter()
+            .map(|k| KnownOut {
+                path: k.path.to_string_lossy().into_owned(),
+                kind: k.kind,
+                mtime_ms: k.mtime_ms as f64,
+            })
+            .collect();
+        Reply {
+            files,
+            known: known_out,
+            more,
+        }
     }
 
     /// Reads what is new in one file. Returns (output if anything changed, raw bytes read, a pass-holding remainder).
@@ -257,11 +311,21 @@ impl Scanner {
         let mtime = mtime_of(m);
         let size = m.len();
         let ino = ino_of(m);
-        let meta_mtime_now = if k.kind == Kind::Claude { meta_mtime(&k.path) } else { None };
+        let meta_mtime_now = if k.kind == Kind::Claude {
+            meta_mtime(&k.path)
+        } else {
+            None
+        };
         let st = self.states.get(&k.path);
-        let meta_changed = k.kind == Kind::Claude && st.map(|s| s.meta_mtime) != Some(meta_mtime_now);
+        let meta_changed =
+            k.kind == Kind::Claude && st.map(|s| s.meta_mtime) != Some(meta_mtime_now);
         if let Some(s) = st {
-            if s.offset == size && s.mtime_ms == mtime && s.size == size && s.ino == ino && !meta_changed {
+            if s.offset == size
+                && s.mtime_ms == mtime
+                && s.size == size
+                && s.ino == ino
+                && !meta_changed
+            {
                 return Some((None, 0, false)); // nothing new: one stat was all it cost
             }
         }
@@ -270,20 +334,54 @@ impl Scanner {
         f.read_exact(&mut head).ok()?;
         let reset = match st {
             None => true,
-            Some(s) => s.ino != ino || s.kind != k.kind || size < s.offset || s.head != head && s.head.len() <= head.len() && s.head[..] != head[..s.head.len()],
+            Some(s) => {
+                s.ino != ino
+                    || s.kind != k.kind
+                    || size < s.offset
+                    || s.head != head
+                        && s.head.len() <= head.len()
+                        && s.head[..] != head[..s.head.len()]
+            }
         };
-        let (start, skipping, title_sent) = if reset { (0, false, false) } else { st.map(|s| (s.offset, s.skipping, s.title_sent)).unwrap_or((0, false, false)) };
+        let (start, skipping, title_sent) = if reset {
+            (0, false, false)
+        } else {
+            st.map(|s| (s.offset, s.skipping, s.title_sent))
+                .unwrap_or((0, false, false))
+        };
         f.seek(SeekFrom::Start(start)).ok()?;
-        let mut run = Run { offset: start, skipping, title_sent, budget: self.file_budget };
+        let mut run = Run {
+            offset: start,
+            skipping,
+            title_sent,
+            budget: self.file_budget,
+        };
         let out = read_lines(f, k.kind, &mut run);
-        let changed = reset || !out.records.is_empty() || st.map(|s| s.mtime_ms != mtime).unwrap_or(true) || meta_changed;
+        let changed = reset
+            || !out.records.is_empty()
+            || st.map(|s| s.mtime_ms != mtime).unwrap_or(true)
+            || meta_changed;
         let hold = out.budget_hit && !run.skipping; // a skip in progress produces nothing until the line ends: it does not hold a pass open
         self.states.insert(
             k.path.clone(),
-            FileState { kind: k.kind, ino, head: head.clone(), offset: run.offset, mtime_ms: if out.budget_hit { -1 } else { mtime }, size: if out.budget_hit { 0 } else { size }, meta_mtime: meta_mtime_now, skipping: run.skipping, title_sent: run.title_sent },
+            FileState {
+                kind: k.kind,
+                ino,
+                head: head.clone(),
+                offset: run.offset,
+                mtime_ms: if out.budget_hit { -1 } else { mtime },
+                size: if out.budget_hit { 0 } else { size },
+                meta_mtime: meta_mtime_now,
+                skipping: run.skipping,
+                title_sent: run.title_sent,
+            },
         );
         let meta = if meta_changed || reset {
-            match if k.kind == Kind::Claude { read_meta(&k.path) } else { MetaRead::Unchanged } {
+            match if k.kind == Kind::Claude {
+                read_meta(&k.path)
+            } else {
+                MetaRead::Unchanged
+            } {
                 MetaRead::Value(v) => Some(Some(v)),
                 MetaRead::Missing => Some(None),
                 MetaRead::Unchanged => None,
@@ -291,7 +389,14 @@ impl Scanner {
         } else {
             None
         };
-        let file_out = changed.then(|| FileOut { path: k.path.to_string_lossy().into_owned(), kind: k.kind, mtime_ms: mtime as f64, reset, records: out.records, meta });
+        let file_out = changed.then(|| FileOut {
+            path: k.path.to_string_lossy().into_owned(),
+            kind: k.kind,
+            mtime_ms: mtime as f64,
+            reset,
+            records: out.records,
+            meta,
+        });
         Some((file_out, out.used, hold))
     }
 }
@@ -307,7 +412,10 @@ fn meta_path(p: &Path) -> PathBuf {
 }
 
 fn meta_mtime(p: &Path) -> Option<i64> {
-    fs::symlink_metadata(meta_path(p)).ok().filter(|m| m.is_file()).map(|m| mtime_of(&m))
+    fs::symlink_metadata(meta_path(p))
+        .ok()
+        .filter(|m| m.is_file())
+        .map(|m| mtime_of(&m))
 }
 
 /// How the Mac code shows a `.meta.json` value: strings as they are, null as nothing, other JSON values as their text
@@ -326,13 +434,21 @@ fn meta_text(v: &Value) -> Option<Value> {
 /// The sibling `.meta.json`, only the two fields the page uses; a missing, huge, odd or non-regular file is "no meta".
 fn read_meta(p: &Path) -> MetaRead {
     let mp = meta_path(p);
-    let Ok(m) = fs::symlink_metadata(&mp) else { return MetaRead::Missing };
+    let Ok(m) = fs::symlink_metadata(&mp) else {
+        return MetaRead::Missing;
+    };
     if !m.is_file() || m.len() > META_MAX {
         return MetaRead::Missing;
     }
-    let Ok(mut f) = crate::files::open_regular(&mp, false) else { return MetaRead::Missing };
+    let Ok(mut f) = crate::files::open_regular(&mp, false) else {
+        return MetaRead::Missing;
+    };
     let mut text = String::new();
-    if (&mut f).take(META_MAX + 1).read_to_string(&mut text).is_err() {
+    if (&mut f)
+        .take(META_MAX + 1)
+        .read_to_string(&mut text)
+        .is_err()
+    {
         return MetaRead::Missing;
     }
     match serde_json::from_str::<Value>(&text) {
@@ -370,7 +486,11 @@ pub struct ReadOut {
 /// and remembered in `run.skipping`, so a huge file without newlines costs O(budget) per call, not a full re-read.
 pub fn read_lines<R: Read>(src: R, kind: Kind, run: &mut Run) -> ReadOut {
     let mut r = BufReader::with_capacity(256 * 1024, src);
-    let mut out = ReadOut { records: vec![], used: 0, budget_hit: false };
+    let mut out = ReadOut {
+        records: vec![],
+        used: 0,
+        budget_hit: false,
+    };
     let mut buf: Vec<u8> = Vec::new();
     loop {
         if out.used >= run.budget {
@@ -393,7 +513,10 @@ pub fn read_lines<R: Read>(src: R, kind: Kind, run: &mut Run) -> ReadOut {
             continue;
         }
         buf.clear();
-        let n = match (&mut r).take(MAX_LINE as u64 + 1).read_until(b'\n', &mut buf) {
+        let n = match (&mut r)
+            .take(MAX_LINE as u64 + 1)
+            .read_until(b'\n', &mut buf)
+        {
             Ok(0) | Err(_) => break,
             Ok(n) => n,
         };
@@ -445,7 +568,9 @@ fn is_report_prefix(c: char) -> bool {
 fn progress_lines(text: &str) -> String {
     let mut out: Vec<String> = vec![];
     for line in text.split('\n') {
-        let Some(at) = line.find("PROGRESS") else { continue };
+        let Some(at) = line.find("PROGRESS") else {
+            continue;
+        };
         if line[..at].chars().all(is_report_prefix) {
             out.push(cut(&line[at..], PROGRESS_KEEP));
         }
@@ -466,7 +591,16 @@ fn usage_of(u: &Value) -> Option<Value> {
         return None;
     }
     let mut o = Map::new();
-    copy(&mut o, u, &["input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"]);
+    copy(
+        &mut o,
+        u,
+        &[
+            "input_tokens",
+            "output_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+        ],
+    );
     Some(Value::Object(o))
 }
 
@@ -527,7 +661,10 @@ fn injected(text: &str) -> bool {
 
 /// One line of text from anything: control characters become spaces, white space collapses, at most `n` characters.
 fn one_line(text: &str, n: usize) -> String {
-    let spaced: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+    let spaced: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
     cut(&spaced.split_whitespace().collect::<Vec<_>>().join(" "), n)
 }
 
@@ -560,14 +697,27 @@ fn slim_codex(d: &Value, title_sent: &mut bool) -> Value {
                 np.insert("action".into(), json!({ "type": t }));
             }
         }
-        if let Some(total) = p.get("info").and_then(|i| i.get("total_token_usage")).and_then(|t| {
-            if !t.is_object() {
-                return None;
-            }
-            let mut o = Map::new();
-            copy(&mut o, t, &["input_tokens", "output_tokens", "cached_input_tokens", "cache_write_input_tokens"]);
-            Some(Value::Object(o))
-        }) {
+        if let Some(total) = p
+            .get("info")
+            .and_then(|i| i.get("total_token_usage"))
+            .and_then(|t| {
+                if !t.is_object() {
+                    return None;
+                }
+                let mut o = Map::new();
+                copy(
+                    &mut o,
+                    t,
+                    &[
+                        "input_tokens",
+                        "output_tokens",
+                        "cached_input_tokens",
+                        "cache_write_input_tokens",
+                    ],
+                );
+                Some(Value::Object(o))
+            })
+        {
             np.insert("info".into(), json!({ "total_token_usage": total }));
         }
         if s(d, "type") == Some("response_item") && s(p, "type") == Some("message") {
@@ -583,7 +733,10 @@ fn slim_codex(d: &Value, title_sent: &mut bool) -> Value {
                             let trimmed = t.trim();
                             if !trimmed.is_empty() && !injected(trimmed) {
                                 *title_sent = true; // the first real prompt, once per file; later turns are never sent
-                                nb.insert("text".into(), Value::String(one_line(trimmed, TITLE_KEEP)));
+                                nb.insert(
+                                    "text".into(),
+                                    Value::String(one_line(trimmed, TITLE_KEEP)),
+                                );
                             }
                         }
                     }
@@ -613,7 +766,10 @@ pub fn roots(env: &dyn Fn(&str) -> Option<String>, home: &str) -> (PathBuf, Path
             None => rel.iter().fold(PathBuf::from(home), |p, part| p.join(part)),
         }
     };
-    (pick("AGENTSBAR_CLAUDE_DIR", &[".claude", "projects"]), pick("AGENTSBAR_CODEX_DIR", &[".codex", "sessions"]))
+    (
+        pick("AGENTSBAR_CLAUDE_DIR", &[".claude", "projects"]),
+        pick("AGENTSBAR_CODEX_DIR", &[".codex", "sessions"]),
+    )
 }
 
 #[cfg(test)]
@@ -622,15 +778,28 @@ mod tests {
     use std::fs::File;
 
     /// Test helper with the old shape: (records, new offset, bytes used, budget hit).
-    fn read_lines_t<R: Read>(src: R, offset: u64, kind: Kind, budget: u64) -> (Vec<Value>, u64, u64, bool) {
-        let mut run = Run { offset, skipping: false, title_sent: false, budget };
+    fn read_lines_t<R: Read>(
+        src: R,
+        offset: u64,
+        kind: Kind,
+        budget: u64,
+    ) -> (Vec<Value>, u64, u64, bool) {
+        let mut run = Run {
+            offset,
+            skipping: false,
+            title_sent: false,
+            budget,
+        };
         let o = read_lines(src, kind, &mut run);
         (o.records, run.offset, o.used, o.budget_hit)
     }
     use std::io::{Cursor, Write};
 
     fn line(ts: i64, extra: &str) -> String {
-        format!("{{\"type\":\"assistant\",\"timestamp\":\"2026-01-01T00:00:{:02}Z\"{extra}}}\n", ts % 60)
+        format!(
+            "{{\"type\":\"assistant\",\"timestamp\":\"2026-01-01T00:00:{:02}Z\"{extra}}}\n",
+            ts % 60
+        )
     }
 
     fn claude_dir(root: &Path, project: &str, session: &str, name: &str, body: &str) -> PathBuf {
@@ -643,21 +812,36 @@ mod tests {
 
     fn set_mtime(p: &Path, ms_ago: i64) {
         let t = SystemTime::now() - std::time::Duration::from_millis(ms_ago as u64);
-        File::options().write(true).open(p).unwrap().set_modified(t).unwrap();
+        File::options()
+            .write(true)
+            .open(p)
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
     }
 
     // ---- line splitting -------------------------------------------------------------------------------------------
 
     #[test]
     fn complete_lines_are_read_and_a_half_written_last_line_waits() {
-        let text = format!("{}{}{{\"type\":\"assistant\",\"timest", line(1, ""), line(2, ""));
-        let (recs, off, _, more) = read_lines_t(Cursor::new(text.as_bytes()), 0, Kind::Claude, u64::MAX);
+        let text = format!(
+            "{}{}{{\"type\":\"assistant\",\"timest",
+            line(1, ""),
+            line(2, "")
+        );
+        let (recs, off, _, more) =
+            read_lines_t(Cursor::new(text.as_bytes()), 0, Kind::Claude, u64::MAX);
         assert_eq!(recs.len(), 2);
         assert_eq!(off as usize, line(1, "").len() * 2);
         assert!(!more);
         // the rest arrives: read from the saved offset
         let full = format!("{text}amp\":\"2026-01-01T00:00:03Z\"}}\n");
-        let (recs2, off2, _, _) = read_lines_t(Cursor::new(&full.as_bytes()[off as usize..]), off, Kind::Claude, u64::MAX);
+        let (recs2, off2, _, _) = read_lines_t(
+            Cursor::new(&full.as_bytes()[off as usize..]),
+            off,
+            Kind::Claude,
+            u64::MAX,
+        );
         assert_eq!(recs2.len(), 1);
         assert_eq!(off2 as usize, full.len());
     }
@@ -665,7 +849,8 @@ mod tests {
     #[test]
     fn bad_complete_lines_and_non_objects_are_skipped_not_fatal() {
         let text = format!("not json\n[]\n5\n\n{}", line(1, ""));
-        let (recs, off, _, _) = read_lines_t(Cursor::new(text.as_bytes()), 0, Kind::Claude, u64::MAX);
+        let (recs, off, _, _) =
+            read_lines_t(Cursor::new(text.as_bytes()), 0, Kind::Claude, u64::MAX);
         assert_eq!(recs.len(), 1);
         assert_eq!(off as usize, text.len());
     }
@@ -676,21 +861,32 @@ mod tests {
         text.push_str(&"y".repeat(MAX_LINE + 100_000));
         text.push_str("\"}\n");
         text.push_str(&line(5, ""));
-        let (recs, off, _, _) = read_lines_t(Cursor::new(text.as_bytes()), 0, Kind::Claude, u64::MAX);
+        let (recs, off, _, _) =
+            read_lines_t(Cursor::new(text.as_bytes()), 0, Kind::Claude, u64::MAX);
         assert_eq!(recs.len(), 1, "only the normal line after the giant one");
         assert_eq!(off as usize, text.len());
     }
 
     #[test]
-    fn an_enormous_line_still_being_written_is_skipped_across_calls_and_resumes_after_its_newline() {
+    fn an_enormous_line_still_being_written_is_skipped_across_calls_and_resumes_after_its_newline()
+    {
         let mut text = line(1, "");
         let first = text.len();
         text.push_str(&"z".repeat(MAX_LINE + 10)); // no newline yet
-        let mut run = Run { offset: 0, skipping: false, title_sent: false, budget: u64::MAX };
+        let mut run = Run {
+            offset: 0,
+            skipping: false,
+            title_sent: false,
+            budget: u64::MAX,
+        };
         let o = read_lines(Cursor::new(text.as_bytes()), Kind::Claude, &mut run);
         assert_eq!(o.records.len(), 1);
         assert!(run.skipping, "inside the giant line");
-        assert_eq!(run.offset as usize, text.len(), "its bytes are already counted: they are never read twice");
+        assert_eq!(
+            run.offset as usize,
+            text.len(),
+            "its bytes are already counted: they are never read twice"
+        );
         // the rest of the line and a normal line arrive
         let more = format!("zzzz\n{}", line(2, ""));
         let o2 = read_lines(Cursor::new(more.as_bytes()), Kind::Claude, &mut run);
@@ -722,7 +918,12 @@ mod tests {
         let text: String = (0..50).map(|i| line(i, "")).collect();
         let (a, off, used, more) = read_lines_t(Cursor::new(text.as_bytes()), 0, Kind::Claude, 500);
         assert!(more && used >= 500 && a.len() < 50);
-        let (b, end, _, more2) = read_lines_t(Cursor::new(&text.as_bytes()[off as usize..]), off, Kind::Claude, u64::MAX);
+        let (b, end, _, more2) = read_lines_t(
+            Cursor::new(&text.as_bytes()[off as usize..]),
+            off,
+            Kind::Claude,
+            u64::MAX,
+        );
         assert!(!more2);
         assert_eq!(a.len() + b.len(), 50);
         assert_eq!(end as usize, text.len());
@@ -735,7 +936,12 @@ mod tests {
         let d: Value = serde_json::from_str(r#"{"type":"assistant","timestamp":"t","requestId":"r","cwd":"/private/path","message":{"id":"m","model":"x","usage":{"input_tokens":1,"output_tokens":2,"service_tier":"s"},"content":[{"type":"text","text":"secret prose\nPROGRESS: 40% - ok\nmore secret"},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"SECRET"}}]}}"#).unwrap();
         let s = slim(Kind::Claude, &d, &mut false);
         let text = s.to_string();
-        assert!(!text.contains("SECRET") && !text.contains("secret") && !text.contains("/private/path") && !text.contains("service_tier"));
+        assert!(
+            !text.contains("SECRET")
+                && !text.contains("secret")
+                && !text.contains("/private/path")
+                && !text.contains("service_tier")
+        );
         assert_eq!(s["message"]["content"][0]["text"], "PROGRESS: 40% - ok");
         assert_eq!(s["message"]["content"][1]["name"], "Bash");
         assert_eq!(s["message"]["usage"]["output_tokens"], 2);
@@ -749,7 +955,11 @@ mod tests {
         assert!(!s.contains("SECRET"));
         assert!(s.contains("\"call_id\":\"c\"") && s.contains("shell"));
         let u: Value = serde_json::from_str(r#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"text":"x <INSTRUCTIONS> y"}]}}"#).unwrap();
-        assert_eq!(slim(Kind::Codex, &u, &mut false)["payload"]["content"][0], json!({}), "injected context is never sent");
+        assert_eq!(
+            slim(Kind::Codex, &u, &mut false)["payload"]["content"][0],
+            json!({}),
+            "injected context is never sent"
+        );
     }
 
     /// The fixtures in tests/fixtures/transcripts are slimmed here and compared with tests/fixtures/slim; the TypeScript suite
@@ -763,7 +973,11 @@ mod tests {
         let mut n = 0;
         for e in fs::read_dir(root.join("transcripts")).unwrap().flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            let kind = if name.starts_with("codex") { Kind::Codex } else { Kind::Claude };
+            let kind = if name.starts_with("codex") {
+                Kind::Codex
+            } else {
+                Kind::Claude
+            };
             let bytes = fs::read(e.path()).unwrap();
             assert!(!bytes.contains(&b'\r'), "{name}: fixtures must be LF files (see .gitattributes); a CRLF checkout changes every offset");
             let (recs, _, _, _) = read_lines_t(Cursor::new(bytes), 0, kind, u64::MAX);
@@ -772,7 +986,11 @@ mod tests {
             if std::env::var("UPDATE_SLIM").is_ok() {
                 fs::write(&target, &got).unwrap();
             } else {
-                assert_eq!(String::from_utf8(fs::read(&target).unwrap_or_default()).unwrap(), got, "{name}: run UPDATE_SLIM=1 cargo test slim_golden");
+                assert_eq!(
+                    String::from_utf8(fs::read(&target).unwrap_or_default()).unwrap(),
+                    got,
+                    "{name}: run UPDATE_SLIM=1 cargo test slim_golden"
+                );
             }
             n += 1;
         }
@@ -784,15 +1002,27 @@ mod tests {
     #[test]
     fn roots_follow_the_overrides_then_the_os_defaults() {
         let none = |_: &str| None;
-        assert_eq!(roots(&none, "/home/a"), (PathBuf::from("/home/a/.claude/projects"), PathBuf::from("/home/a/.codex/sessions")));
+        assert_eq!(
+            roots(&none, "/home/a"),
+            (
+                PathBuf::from("/home/a/.claude/projects"),
+                PathBuf::from("/home/a/.codex/sessions")
+            )
+        );
         let env = |k: &str| match k {
             "AGENTSBAR_CLAUDE_DIR" => Some("/x/c".to_string()),
             "AGENTSBAR_CODEX_DIR" => Some("  ".to_string()),
             _ => None,
         };
-        assert_eq!(roots(&env, "/h"), (PathBuf::from("/x/c"), PathBuf::from("/h/.codex/sessions")));
+        assert_eq!(
+            roots(&env, "/h"),
+            (PathBuf::from("/x/c"), PathBuf::from("/h/.codex/sessions"))
+        );
         let win = roots(&none, "C:\\Users\\Ann");
-        assert!(win.0.to_string_lossy().contains(".claude") && win.1.to_string_lossy().contains(".codex"));
+        assert!(
+            win.0.to_string_lossy().contains(".claude")
+                && win.1.to_string_lossy().contains(".codex")
+        );
     }
 
     #[test]
@@ -800,7 +1030,13 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let (cl, cx) = (d.path().join("claude"), d.path().join("codex"));
         for i in 0..320 {
-            let p = claude_dir(&cl, "-proj", "s1", &format!("agent-{i:03}.jsonl"), &line(1, ""));
+            let p = claude_dir(
+                &cl,
+                "-proj",
+                "s1",
+                &format!("agent-{i:03}.jsonl"),
+                &line(1, ""),
+            );
             set_mtime(&p, 1000 + i as i64 * 1000); // agent-000 is the newest
         }
         let old = claude_dir(&cl, "-proj", "s1", "agent-old.jsonl", &line(1, ""));
@@ -814,7 +1050,10 @@ mod tests {
         let r = s.scan(now_ms(), true);
         let claude: Vec<_> = r.known.iter().filter(|k| k.kind == Kind::Claude).collect();
         assert_eq!(claude.len(), MAX_FILES);
-        assert!(claude.iter().any(|k| k.path.ends_with("agent-000.jsonl")) && !claude.iter().any(|k| k.path.ends_with("agent-319.jsonl")));
+        assert!(
+            claude.iter().any(|k| k.path.ends_with("agent-000.jsonl"))
+                && !claude.iter().any(|k| k.path.ends_with("agent-319.jsonl"))
+        );
         assert!(!r.known.iter().any(|k| k.path.contains("agent-old")));
         let codex: Vec<_> = r.known.iter().filter(|k| k.kind == Kind::Codex).collect();
         assert_eq!(codex.len(), 1);
@@ -827,13 +1066,22 @@ mod tests {
     fn warm_rescans_return_only_changed_files_and_only_the_new_bytes() {
         let d = tempfile::tempdir().unwrap();
         let cl = d.path().join("c");
-        let a = claude_dir(&cl, "-p", "s", "agent-a.jsonl", &format!("{}{}", line(1, ""), line(2, "")));
+        let a = claude_dir(
+            &cl,
+            "-p",
+            "s",
+            "agent-a.jsonl",
+            &format!("{}{}", line(1, ""), line(2, "")),
+        );
         let b = claude_dir(&cl, "-p", "s", "agent-b.jsonl", &line(1, ""));
         let mut s = Scanner::new(cl, d.path().join("none"));
         let r1 = s.scan(now_ms(), true);
         assert_eq!(r1.files.len(), 2);
         let again = s.scan(now_ms(), false);
-        assert!(again.files.is_empty(), "nothing changed: no files, no records");
+        assert!(
+            again.files.is_empty(),
+            "nothing changed: no files, no records"
+        );
         let mut f = File::options().append(true).open(&a).unwrap();
         f.write_all(line(3, "").as_bytes()).unwrap();
         drop(f);
@@ -860,21 +1108,43 @@ mod tests {
     fn a_replaced_file_starts_over_even_when_it_is_larger() {
         let d = tempfile::tempdir().unwrap();
         let cl = d.path().join("c");
-        let p = claude_dir(&cl, "-p", "s", "agent-a.jsonl", &format!("{}{}", line(1, ",\"k\":\"first file head\""), line(2, "")));
+        let p = claude_dir(
+            &cl,
+            "-p",
+            "s",
+            "agent-a.jsonl",
+            &format!("{}{}", line(1, ",\"k\":\"first file head\""), line(2, "")),
+        );
         let mut s = Scanner::new(cl, d.path().join("none"));
         s.scan(now_ms(), true);
         // same path, different content (rename-over: a new file with a different head), bigger
         let tmp = p.with_extension("tmp");
-        fs::write(&tmp, format!("{}{}{}", line(9, ",\"k\":\"another head altogether\""), line(10, ""), line(11, ""))).unwrap();
+        fs::write(
+            &tmp,
+            format!(
+                "{}{}{}",
+                line(9, ",\"k\":\"another head altogether\""),
+                line(10, ""),
+                line(11, "")
+            ),
+        )
+        .unwrap();
         #[cfg(unix)]
         let old_ino = ino_of(&fs::metadata(&p).unwrap());
         #[cfg(unix)]
-        assert_ne!(old_ino, ino_of(&fs::metadata(&tmp).unwrap()), "the replacement was made while the old file was alive");
+        assert_ne!(
+            old_ino,
+            ino_of(&fs::metadata(&tmp).unwrap()),
+            "the replacement was made while the old file was alive"
+        );
         fs::rename(&tmp, &p).unwrap();
         // whether or not a file system reuses inode numbers (Windows has none), the new head and size reveal the replacement
         let r = s.scan(now_ms(), false);
         assert_eq!(r.files.len(), 1);
-        assert!(r.files[0].reset, "a replaced file must reset the page's state");
+        assert!(
+            r.files[0].reset,
+            "a replaced file must reset the page's state"
+        );
         assert_eq!(r.files[0].records.len(), 3);
     }
 
@@ -882,10 +1152,25 @@ mod tests {
     fn the_same_inode_rewritten_with_other_content_is_caught_by_the_head_bytes() {
         let d = tempfile::tempdir().unwrap();
         let cl = d.path().join("c");
-        let p = claude_dir(&cl, "-p", "s", "agent-a.jsonl", &format!("{}{}", line(1, ",\"k\":\"first file head, quite long\""), line(2, "")));
+        let p = claude_dir(
+            &cl,
+            "-p",
+            "s",
+            "agent-a.jsonl",
+            &format!(
+                "{}{}",
+                line(1, ",\"k\":\"first file head, quite long\""),
+                line(2, "")
+            ),
+        );
         let mut s = Scanner::new(cl, d.path().join("none"));
         s.scan(now_ms(), true);
-        let new = format!("{}{}{}", line(7, ",\"k\":\"rewritten in place, a different head\""), line(8, ""), line(9, ""));
+        let new = format!(
+            "{}{}{}",
+            line(7, ",\"k\":\"rewritten in place, a different head\""),
+            line(8, ""),
+            line(9, "")
+        );
         fs::write(&p, new).unwrap(); // truncate + write in place: the inode is the same, only the head bytes differ
         let r = s.scan(now_ms(), false);
         assert!(r.files[0].reset);
@@ -896,7 +1181,13 @@ mod tests {
     fn a_truncated_file_resets() {
         let d = tempfile::tempdir().unwrap();
         let cl = d.path().join("c");
-        let p = claude_dir(&cl, "-p", "s", "agent-a.jsonl", &(0..10).map(|i| line(i, "")).collect::<String>());
+        let p = claude_dir(
+            &cl,
+            "-p",
+            "s",
+            "agent-a.jsonl",
+            &(0..10).map(|i| line(i, "")).collect::<String>(),
+        );
         let mut s = Scanner::new(cl, d.path().join("none"));
         s.scan(now_ms(), true);
         fs::write(&p, line(1, "")).unwrap();
@@ -909,11 +1200,18 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let cl = d.path().join("c");
         let p = claude_dir(&cl, "-p", "s", "agent-a.jsonl", &line(1, ""));
-        fs::write(p.with_extension("meta.json"), r#"{"agentType":"explorer","description":"Look around","secret":"S"}"#).unwrap();
+        fs::write(
+            p.with_extension("meta.json"),
+            r#"{"agentType":"explorer","description":"Look around","secret":"S"}"#,
+        )
+        .unwrap();
         let mut s = Scanner::new(cl, d.path().join("none"));
         let r = s.scan(now_ms(), true);
         let meta = r.files[0].meta.clone().unwrap().unwrap();
-        assert_eq!(meta, json!({"agentType":"explorer","description":"Look around"}));
+        assert_eq!(
+            meta,
+            json!({"agentType":"explorer","description":"Look around"})
+        );
         assert!(s.scan(now_ms(), false).files.is_empty());
         fs::write(p.with_extension("meta.json"), "not json").unwrap();
         set_mtime(&p.with_extension("meta.json"), 60_000);
@@ -949,7 +1247,10 @@ mod tests {
         s.scan(now_ms(), true);
         assert!(s.is_known(p.to_str().unwrap()));
         assert!(!s.is_known("/etc/passwd"));
-        assert!(!s.is_known(&format!("{}/../agent-a.jsonl", p.parent().unwrap().display())));
+        assert!(!s.is_known(&format!(
+            "{}/../agent-a.jsonl",
+            p.parent().unwrap().display()
+        )));
     }
 
     #[test]
@@ -967,7 +1268,9 @@ mod tests {
     fn a_big_cold_scan_is_read_in_bounded_calls() {
         let d = tempfile::tempdir().unwrap();
         let cl = d.path().join("c");
-        let body: String = (0..2000).map(|i| line(i, &format!(",\"pad\":\"{}\"", "p".repeat(4000)))).collect(); // ~8 MB per file
+        let body: String = (0..2000)
+            .map(|i| line(i, &format!(",\"pad\":\"{}\"", "p".repeat(4000))))
+            .collect(); // ~8 MB per file
         for i in 0..8 {
             claude_dir(&cl, "-p", "s", &format!("agent-{i}.jsonl"), &body);
         }
@@ -983,7 +1286,10 @@ mod tests {
             }
         }
         assert_eq!(total, 8 * 2000, "every record arrives exactly once");
-        assert!(calls >= 2, "64 MB of transcripts do not fit one call budget");
+        assert!(
+            calls >= 2,
+            "64 MB of transcripts do not fit one call budget"
+        );
     }
 
     #[cfg(unix)]
@@ -991,7 +1297,11 @@ mod tests {
         let mut u: libc::rusage = unsafe { std::mem::zeroed() };
         unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut u) };
         let raw = u.ru_maxrss as f64;
-        if cfg!(target_os = "macos") { raw / 1048576.0 } else { raw / 1024.0 }
+        if cfg!(target_os = "macos") {
+            raw / 1048576.0
+        } else {
+            raw / 1024.0
+        }
     }
 
     /// Perf with 300 synthetic transcripts (200 Claude + 100 Codex, ~400 records each): cold scan, warm rescan, one appended file.
@@ -1002,7 +1312,9 @@ mod tests {
     fn perf_300_transcripts() {
         let d = tempfile::tempdir().unwrap();
         let (cl, cx) = (d.path().join("c"), d.path().join("x"));
-        let rec = |ts: usize, n: usize| format!("{{\"type\":\"assistant\",\"timestamp\":\"2026-01-01T00:{:02}:{:02}Z\",\"message\":{{\"id\":\"m{n}\",\"usage\":{{\"input_tokens\":10,\"output_tokens\":{n}}},\"content\":[{{\"type\":\"text\",\"text\":\"{}\"}},{{\"type\":\"tool_use\",\"id\":\"t{n}\",\"name\":\"Bash\",\"input\":{{\"command\":\"{}\"}}}}]}}}}\n", ts / 60 % 60, ts % 60, "w".repeat(300), "c".repeat(200));
+        let rec = |ts: usize, n: usize| {
+            format!("{{\"type\":\"assistant\",\"timestamp\":\"2026-01-01T00:{:02}:{:02}Z\",\"message\":{{\"id\":\"m{n}\",\"usage\":{{\"input_tokens\":10,\"output_tokens\":{n}}},\"content\":[{{\"type\":\"text\",\"text\":\"{}\"}},{{\"type\":\"tool_use\",\"id\":\"t{n}\",\"name\":\"Bash\",\"input\":{{\"command\":\"{}\"}}}}]}}}}\n", ts / 60 % 60, ts % 60, "w".repeat(300), "c".repeat(200))
+        };
         for i in 0..200 {
             let body: String = (0..400).map(|n| rec(n, n)).collect();
             claude_dir(&cl, "-p", "s", &format!("agent-{i}.jsonl"), &body);
@@ -1013,7 +1325,11 @@ mod tests {
             let body: String = (0..400).map(|n| format!("{{\"timestamp\":\"2026-01-01T00:00:{:02}Z\",\"type\":\"response_item\",\"payload\":{{\"type\":\"function_call\",\"call_id\":\"c{n}\",\"name\":\"shell\",\"arguments\":\"{}\"}}}}\n", n % 60, "a".repeat(400))).collect();
             fs::write(cxd.join(format!("rollout-{i}.jsonl")), body).unwrap();
         }
-        let bytes: u64 = fs::read_dir(cl.join("-p/s/subagents")).unwrap().flatten().map(|e| e.metadata().unwrap().len()).sum();
+        let bytes: u64 = fs::read_dir(cl.join("-p/s/subagents"))
+            .unwrap()
+            .flatten()
+            .map(|e| e.metadata().unwrap().len())
+            .sum();
         let mut s = Scanner::new(cl.clone(), cx);
         let t = std::time::Instant::now();
         let mut cold = s.scan(now_ms(), true);
@@ -1032,21 +1348,54 @@ mod tests {
         let t = std::time::Instant::now();
         let walk = s.scan(now_ms(), true);
         let walk_ms = t.elapsed().as_secs_f64() * 1000.0;
-        let mut f = File::options().append(true).open(cl.join("-p/s/subagents/agent-7.jsonl")).unwrap();
+        let mut f = File::options()
+            .append(true)
+            .open(cl.join("-p/s/subagents/agent-7.jsonl"))
+            .unwrap();
         f.write_all(rec(5, 999).as_bytes()).unwrap();
         drop(f);
         let t = std::time::Instant::now();
         let one = s.scan(now_ms(), false);
         let one_ms = t.elapsed().as_secs_f64() * 1000.0;
-        eprintln!("PERF files=300 claude_bytes={} ({} MB all)", bytes, bytes / 1048576);
-        eprintln!("PERF cold scan {:.0} ms in {} call(s), {} files, slim IPC payload {:.1} MB", cold_ms, rounds, all.len(), ipc as f64 / 1048576.0);
-        eprintln!("PERF warm rescan (stat only) {:.2} ms, {} files returned", warm_ms, warm.files.len());
-        eprintln!("PERF folder walk + stat {:.2} ms, {} files returned", walk_ms, walk.files.len());
-        eprintln!("PERF one appended file {:.2} ms, {} file(s), {} record(s)", one_ms, one.files.len(), one.files.first().map(|f| f.records.len()).unwrap_or(0));
+        eprintln!(
+            "PERF files=300 claude_bytes={} ({} MB all)",
+            bytes,
+            bytes / 1048576
+        );
+        eprintln!(
+            "PERF cold scan {:.0} ms in {} call(s), {} files, slim IPC payload {:.1} MB",
+            cold_ms,
+            rounds,
+            all.len(),
+            ipc as f64 / 1048576.0
+        );
+        eprintln!(
+            "PERF warm rescan (stat only) {:.2} ms, {} files returned",
+            warm_ms,
+            warm.files.len()
+        );
+        eprintln!(
+            "PERF folder walk + stat {:.2} ms, {} files returned",
+            walk_ms,
+            walk.files.len()
+        );
+        eprintln!(
+            "PERF one appended file {:.2} ms, {} file(s), {} record(s)",
+            one_ms,
+            one.files.len(),
+            one.files.first().map(|f| f.records.len()).unwrap_or(0)
+        );
         eprintln!("PERF peak RSS of the test process {:.0} MB", max_rss_mb());
         if let Ok(path) = std::env::var("PERF_OUT") {
             let known: Vec<_> = s.scan(now_ms(), false).known;
-            fs::write(path, serde_json::to_string(&serde_json::json!({ "files": all, "known": known, "more": false })).unwrap()).unwrap();
+            fs::write(
+                path,
+                serde_json::to_string(
+                    &serde_json::json!({ "files": all, "known": known, "more": false }),
+                )
+                .unwrap(),
+            )
+            .unwrap();
         }
     }
 }
@@ -1059,7 +1408,11 @@ mod review_tests {
     use std::io::{Cursor, Write};
 
     fn sub(root: &Path, name: &str) -> PathBuf {
-        let d = root.join("claude").join("proj").join("sess").join("subagents");
+        let d = root
+            .join("claude")
+            .join("proj")
+            .join("sess")
+            .join("subagents");
         fs::create_dir_all(&d).unwrap();
         d.join(name)
     }
@@ -1071,7 +1424,12 @@ mod review_tests {
     }
     fn fresh(p: &Path) {
         let t = SystemTime::now() - std::time::Duration::from_secs(5);
-        File::options().write(true).open(p).unwrap().set_modified(t).unwrap();
+        File::options()
+            .write(true)
+            .open(p)
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
     }
 
     // ---- 1: a cold start is one incomplete pass until every file is read ------------------------------------------
@@ -1102,10 +1460,16 @@ mod review_tests {
             }
         }
         assert!(calls > 5, "a big start takes many calls ({calls})");
-        assert!(more_flags[..more_flags.len() - 1].iter().all(|m| *m), "every call before the last says more = true");
+        assert!(
+            more_flags[..more_flags.len() - 1].iter().all(|m| *m),
+            "every call before the last says more = true"
+        );
         assert!(!more_flags.last().unwrap());
         assert_eq!(total, 12 * 400, "every record exactly once");
-        assert!(!sc.scan(now_ms(), false).more, "a settled pass stays complete");
+        assert!(
+            !sc.scan(now_ms(), false).more,
+            "a settled pass stays complete"
+        );
     }
 
     #[test]
@@ -1153,14 +1517,25 @@ mod review_tests {
         // each call reads about FILE_BUDGET (+ the one block that crosses it), not the file
         let st = sc.states.values().next().unwrap();
         assert!(st.skipping);
-        assert!(st.offset >= FILE_BUDGET && st.offset <= FILE_BUDGET + MAX_LINE as u64 + (1 << 16), "offset {}", st.offset);
+        assert!(
+            st.offset >= FILE_BUDGET && st.offset <= FILE_BUDGET + MAX_LINE as u64 + (1 << 16),
+            "offset {}",
+            st.offset
+        );
         let before = st.offset;
         let t = std::time::Instant::now();
         sc.scan(now_ms(), false);
         let second = t.elapsed();
         let after = sc.states.values().next().unwrap().offset;
-        assert!(after > before && after - before <= FILE_BUDGET + (1 << 16), "progress {} per call", after - before);
-        assert!(first < std::time::Duration::from_secs(5) && second < std::time::Duration::from_secs(5), "{first:?} {second:?}");
+        assert!(
+            after > before && after - before <= FILE_BUDGET + (1 << 16),
+            "progress {} per call",
+            after - before
+        );
+        assert!(
+            first < std::time::Duration::from_secs(5) && second < std::time::Duration::from_secs(5),
+            "{first:?} {second:?}"
+        );
     }
 
     #[test]
@@ -1189,7 +1564,10 @@ mod review_tests {
                 break;
             }
         }
-        assert_eq!(got, 2, "the record before and the record after the 12 MB line, nothing else");
+        assert_eq!(
+            got, 2,
+            "the record before and the record after the 12 MB line, nothing else"
+        );
         assert!(calls >= 4, "the skip took {calls} calls");
         assert!(!sc.states.values().next().unwrap().skipping);
     }
@@ -1217,7 +1595,9 @@ mod review_tests {
             let r = sc.scan(now_ms(), true);
             tx.send((r.known.len(), r.files.len())).ok();
         });
-        let got = rx.recv_timeout(std::time::Duration::from_secs(10)).expect("the scan must not hang on a FIFO");
+        let got = rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("the scan must not hang on a FIFO");
         assert_eq!(got, (1, 1));
     }
 
@@ -1236,8 +1616,14 @@ mod review_tests {
         fs::write(&real, "x").unwrap();
         let link = d.path().join("l");
         std::os::unix::fs::symlink(&real, &link).unwrap();
-        assert!(crate::files::open_regular(&link, false).is_err(), "transcripts are never read through a link");
-        assert!(crate::files::open_regular(&link, true).is_ok(), "a data file may be a validated link");
+        assert!(
+            crate::files::open_regular(&link, false).is_err(),
+            "transcripts are never read through a link"
+        );
+        assert!(
+            crate::files::open_regular(&link, true).is_ok(),
+            "a data file may be a validated link"
+        );
     }
 
     // ---- 6: a symlinked folder is not followed --------------------------------------------------------------------
@@ -1272,12 +1658,27 @@ mod review_tests {
         assert_eq!(progress_lines(&long_ok), "PROGRESS: 55% - far right");
         let quoted = format!("{}PROGRESS: 40% - x", "> ".repeat(300));
         assert_eq!(progress_lines(&quoted), "PROGRESS: 40% - x");
-        assert_eq!(progress_lines("we made PROGRESS: 40% today"), "", "text before the marker means it is not a report line");
-        assert_eq!(progress_lines("a\nPROGRESS: 1%\nsecret\r\nPROGRESS: 2%\rPROGRESS: 3%"), "PROGRESS: 1%\nPROGRESS: 2%\rPROGRESS: 3%");
+        assert_eq!(
+            progress_lines("we made PROGRESS: 40% today"),
+            "",
+            "text before the marker means it is not a report line"
+        );
+        assert_eq!(
+            progress_lines("a\nPROGRESS: 1%\nsecret\r\nPROGRESS: 2%\rPROGRESS: 3%"),
+            "PROGRESS: 1%\nPROGRESS: 2%\rPROGRESS: 3%"
+        );
         let huge = format!("PROGRESS: 9% - {}", "n".repeat(100_000));
         assert!(progress_lines(&huge).chars().count() <= PROGRESS_KEEP);
-        let text = format!("{}\nPROGRESS: 70% - ok\n{}", "x".repeat(1_000_000), "y".repeat(1_000_000));
-        assert_eq!(progress_lines(&text), "PROGRESS: 70% - ok", "a long answer costs nothing");
+        let text = format!(
+            "{}\nPROGRESS: 70% - ok\n{}",
+            "x".repeat(1_000_000),
+            "y".repeat(1_000_000)
+        );
+        assert_eq!(
+            progress_lines(&text),
+            "PROGRESS: 70% - ok",
+            "a long answer costs nothing"
+        );
     }
 
     // ---- 2: privacy canary: nothing but the allowed fields crosses ----------------------------------------------------
@@ -1289,29 +1690,56 @@ mod review_tests {
         let p = sub(root, "agent-c.jsonl");
         let rec = |v: Value| v.to_string() + "\n";
         let mut body = String::new();
-        body += &rec(json!({"type":"user","timestamp":"2026-10-08T01:00:00Z","cwd":format!("/{CANARY}/cwd"),"message":{"role":"user","content":[{"type":"text","text":format!("prompt {CANARY}-prompt")}]}}));
-        body += &rec(json!({"type":"assistant","timestamp":"2026-10-08T01:00:01Z","message":{"id":"m1","content":[
+        body += &rec(
+            json!({"type":"user","timestamp":"2026-10-08T01:00:00Z","cwd":format!("/{CANARY}/cwd"),"message":{"role":"user","content":[{"type":"text","text":format!("prompt {CANARY}-prompt")}]}}),
+        );
+        body += &rec(
+            json!({"type":"assistant","timestamp":"2026-10-08T01:00:01Z","message":{"id":"m1","content":[
             {"type":"text","text":format!("prose {CANARY}-prose\nPROGRESS: 40% - shown note\nmore {CANARY}-more")},
-            {"type":"tool_use","id":"t1","name":"Bash","input":{"command":format!("echo {CANARY}-input")}}]}}));
-        body += &rec(json!({"type":"user","timestamp":"2026-10-08T01:00:02Z","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":format!("out {CANARY}-output")}]},"toolUseResult":format!("{CANARY}-tur")}));
+            {"type":"tool_use","id":"t1","name":"Bash","input":{"command":format!("echo {CANARY}-input")}}]}}),
+        );
+        body += &rec(
+            json!({"type":"user","timestamp":"2026-10-08T01:00:02Z","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":format!("out {CANARY}-output")}]},"toolUseResult":format!("{CANARY}-tur")}),
+        );
         fs::write(&p, body).unwrap();
         fs::write(p.with_extension("meta.json"), json!({"agentType":"explorer","description":"Visible task","prompt":format!("{CANARY}-metaprompt")}).to_string()).unwrap();
         fresh(&p);
         // Codex: injected context, first real prompt (long: canary beyond 200 chars), later turns, replies, outputs
         let cxd = root.join("codex/2026/10/08");
         fs::create_dir_all(&cxd).unwrap();
-        let first = format!("Fix the checkout test {}{CANARY}-late-in-first-prompt", "word ".repeat(60));
+        let first = format!(
+            "Fix the checkout test {}{CANARY}-late-in-first-prompt",
+            "word ".repeat(60)
+        );
         let mut cx = String::new();
-        let item = |t: Value| json!({"timestamp":"2026-10-08T01:00:00Z","type":"response_item","payload":t}).to_string() + "\n";
+        let item = |t: Value| {
+            json!({"timestamp":"2026-10-08T01:00:00Z","type":"response_item","payload":t})
+                .to_string()
+                + "\n"
+        };
         cx += &json!({"timestamp":"2026-10-08T01:00:00Z","type":"event_msg","payload":{"type":"task_started"}}).to_string();
         cx += "\n";
-        cx += &item(json!({"type":"message","role":"user","content":[{"type":"input_text","text":format!("# AGENTS.md instructions {CANARY}-agents")}]}));
-        cx += &item(json!({"type":"message","role":"user","content":[{"type":"input_text","text":format!("<environment_context>{CANARY}-env</environment_context>")}]}));
-        cx += &item(json!({"type":"message","role":"user","content":[{"type":"input_text","text":first}]}));
-        cx += &item(json!({"type":"function_call","name":"shell","call_id":"c1","arguments":format!("{{\"cmd\":\"{CANARY}-args\"}}")}));
-        cx += &item(json!({"type":"function_call_output","call_id":"c1","output":format!("{CANARY}-codex-output")}));
-        cx += &item(json!({"type":"message","role":"assistant","content":[{"type":"output_text","text":format!("reply {CANARY}-reply\nPROGRESS: 60% - codex note")}]}));
-        cx += &item(json!({"type":"message","role":"user","content":[{"type":"input_text","text":format!("second turn {CANARY}-turn2")}]}));
+        cx += &item(
+            json!({"type":"message","role":"user","content":[{"type":"input_text","text":format!("# AGENTS.md instructions {CANARY}-agents")}]}),
+        );
+        cx += &item(
+            json!({"type":"message","role":"user","content":[{"type":"input_text","text":format!("<environment_context>{CANARY}-env</environment_context>")}]}),
+        );
+        cx += &item(
+            json!({"type":"message","role":"user","content":[{"type":"input_text","text":first}]}),
+        );
+        cx += &item(
+            json!({"type":"function_call","name":"shell","call_id":"c1","arguments":format!("{{\"cmd\":\"{CANARY}-args\"}}")}),
+        );
+        cx += &item(
+            json!({"type":"function_call_output","call_id":"c1","output":format!("{CANARY}-codex-output")}),
+        );
+        cx += &item(
+            json!({"type":"message","role":"assistant","content":[{"type":"output_text","text":format!("reply {CANARY}-reply\nPROGRESS: 60% - codex note")}]}),
+        );
+        cx += &item(
+            json!({"type":"message","role":"user","content":[{"type":"input_text","text":format!("second turn {CANARY}-turn2")}]}),
+        );
         cx += &json!({"timestamp":"2026-10-08T01:00:01Z","type":"turn_context","payload":{"cwd":format!("/{CANARY}/work"),"model":format!("{CANARY}-model")}}).to_string();
         cx += "\n";
         let cp = cxd.join("rollout-c.jsonl");
@@ -1327,13 +1755,39 @@ mod review_tests {
         let reply = sc.scan(now_ms(), true);
         let payload = serde_json::to_string(&reply).unwrap();
         // the file paths of the test tree contain no canary; only content does
-        assert!(!payload.contains(CANARY), "a canary string crossed: {}", payload.split(CANARY).next().unwrap().chars().rev().take(80).collect::<String>().chars().rev().collect::<String>());
+        assert!(
+            !payload.contains(CANARY),
+            "a canary string crossed: {}",
+            payload
+                .split(CANARY)
+                .next()
+                .unwrap()
+                .chars()
+                .rev()
+                .take(80)
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect::<String>()
+        );
         // what must cross is there
-        assert!(payload.contains("PROGRESS: 40% - shown note") && payload.contains("PROGRESS: 60% - codex note"));
+        assert!(
+            payload.contains("PROGRESS: 40% - shown note")
+                && payload.contains("PROGRESS: 60% - codex note")
+        );
         assert!(payload.contains("Fix the checkout test"));
         assert!(payload.contains("Visible task") && payload.contains("explorer"));
         // the Codex prompt text is sent once and at most 200 characters
-        let texts: Vec<&str> = reply.files.iter().filter(|f| f.kind == Kind::Codex).flat_map(|f| f.records.iter()).filter_map(|r| r["payload"]["content"].as_array()).flatten().filter_map(|b| b["text"].as_str()).filter(|t| !t.starts_with("PROGRESS")).collect();
+        let texts: Vec<&str> = reply
+            .files
+            .iter()
+            .filter(|f| f.kind == Kind::Codex)
+            .flat_map(|f| f.records.iter())
+            .filter_map(|r| r["payload"]["content"].as_array())
+            .flatten()
+            .filter_map(|b| b["text"].as_str())
+            .filter(|t| !t.starts_with("PROGRESS"))
+            .collect();
         assert_eq!(texts.len(), 1, "{texts:?}");
         assert!(texts[0].chars().count() <= TITLE_KEEP);
     }
@@ -1344,12 +1798,17 @@ mod review_tests {
         let cxd = d.path().join("codex/2026/10/08");
         fs::create_dir_all(&cxd).unwrap();
         let cp = cxd.join("rollout-t.jsonl");
-        let msg = |t: &str| json!({"timestamp":"2026-10-08T01:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":t}]}}).to_string() + "\n";
+        let msg = |t: &str| {
+            json!({"timestamp":"2026-10-08T01:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":t}]}}).to_string() + "\n"
+        };
         fs::write(&cp, msg("First real prompt")).unwrap();
         fresh(&cp);
         let mut sc = Scanner::new(d.path().join("claude"), d.path().join("codex"));
         let r1 = sc.scan(now_ms(), true);
-        assert_eq!(r1.files[0].records[0]["payload"]["content"][0]["text"], "First real prompt");
+        assert_eq!(
+            r1.files[0].records[0]["payload"]["content"][0]["text"],
+            "First real prompt"
+        );
         let mut f = fs::OpenOptions::new().append(true).open(&cp).unwrap();
         f.write_all(msg("Second turn text").as_bytes()).unwrap();
         drop(f);
@@ -1372,11 +1831,22 @@ mod review_tests {
     #[test]
     fn a_non_string_codex_name_still_counts_as_a_name_like_python() {
         let mk = |name: Value| json!({"type":"response_item","payload":{"type":"function_call","name":name,"action":{"type":"exec"}}});
-        let name = |v: Value| slim(Kind::Codex, &mk(v), &mut false)["payload"].get("name").cloned();
+        let name = |v: Value| {
+            slim(Kind::Codex, &mk(v), &mut false)["payload"]
+                .get("name")
+                .cloned()
+        };
         assert_eq!(name(json!("shell")), Some(json!("shell")));
         assert_eq!(name(json!(5)), Some(json!(true)));
         assert_eq!(name(json!([1])), Some(json!(true)));
-        for falsy in [json!(null), json!(0), json!(false), json!(""), json!([]), json!({})] {
+        for falsy in [
+            json!(null),
+            json!(0),
+            json!(false),
+            json!(""),
+            json!([]),
+            json!({}),
+        ] {
             let got = name(falsy.clone());
             assert!(got.is_none() || got == Some(json!("")), "{falsy}: {got:?}");
         }
@@ -1395,14 +1865,37 @@ mod review_tests {
 
     #[test]
     fn a_line_nested_five_thousand_deep_is_skipped_and_the_two_records_around_it_are_read() {
-        let deep = format!("{{\"type\":\"assistant\",\"x\":{}{}}}\n", "[".repeat(5000), "]".repeat(5000));
+        let deep = format!(
+            "{{\"type\":\"assistant\",\"x\":{}{}}}\n",
+            "[".repeat(5000),
+            "]".repeat(5000)
+        );
         let text = format!("{}{}{}", line(1), deep, line(2));
-        let mut run = Run { offset: 0, skipping: false, title_sent: false, budget: u64::MAX };
+        let mut run = Run {
+            offset: 0,
+            skipping: false,
+            title_sent: false,
+            budget: u64::MAX,
+        };
         let o = read_lines(Cursor::new(text.as_bytes()), Kind::Claude, &mut run);
         assert_eq!(o.records.len(), 2);
         assert_eq!(run.offset as usize, text.len());
-        let deeper = format!("{}{}{}", line(1), "{\"a\":".repeat(100_000) + "1" + &"}".repeat(100_000) + "\n", line(2));
-        let o = read_lines(Cursor::new(deeper.as_bytes()), Kind::Claude, &mut Run { offset: 0, skipping: false, title_sent: false, budget: u64::MAX });
+        let deeper = format!(
+            "{}{}{}",
+            line(1),
+            "{\"a\":".repeat(100_000) + "1" + &"}".repeat(100_000) + "\n",
+            line(2)
+        );
+        let o = read_lines(
+            Cursor::new(deeper.as_bytes()),
+            Kind::Claude,
+            &mut Run {
+                offset: 0,
+                skipping: false,
+                title_sent: false,
+                budget: u64::MAX,
+            },
+        );
         assert_eq!(o.records.len(), 2, "no stack overflow, no lost agent");
     }
 }

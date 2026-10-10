@@ -12,7 +12,8 @@ use std::time::{Duration, Instant};
 
 pub const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 pub const MAX_OUTPUT: usize = 8 * 1024 * 1024;
-pub const FIELDS: &str = "name,description,primaryLanguage,stargazerCount,pushedAt,url,isPrivate,isFork,isArchived";
+pub const FIELDS: &str =
+    "name,description,primaryLanguage,stargazerCount,pushedAt,url,isPrivate,isFork,isArchived";
 pub const EXTRA_FIELDS: &str = "name,description,primaryLanguage,stargazerCount,pushedAt,url,isPrivate,isFork,isArchived,issues,pullRequests";
 
 pub const MISSING: &str = "GH_MISSING";
@@ -29,13 +30,20 @@ pub fn valid_owner(s: &str) -> bool {
         && b[0].is_ascii_alphanumeric()
         && b[b.len() - 1] != b'-'
         && !s.contains("--")
-        && b.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'-' || *c == b'_')
+        && b.iter()
+            .all(|c| c.is_ascii_alphanumeric() || *c == b'-' || *c == b'_')
 }
 
 /// Repository name: letters, digits, dot, underscore, hyphen, 1 to 100 characters; not "." or "..", never starting with a hyphen.
 pub fn valid_repo(s: &str) -> bool {
     let b = s.as_bytes();
-    !b.is_empty() && b.len() <= 100 && s != "." && s != ".." && b[0] != b'-' && b.iter().all(|c| c.is_ascii_alphanumeric() || matches!(*c, b'.' | b'_' | b'-'))
+    !b.is_empty()
+        && b.len() <= 100
+        && s != "."
+        && s != ".."
+        && b[0] != b'-'
+        && b.iter()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(*c, b'.' | b'_' | b'-'))
 }
 
 /// ("owner", "name") from "owner/name", or None.
@@ -59,7 +67,11 @@ pub fn find_gh(env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
         let p = PathBuf::from(p);
         return is_exe(&p).then_some(p);
     }
-    let names: &[&str] = if cfg!(windows) { &["gh.exe", "gh.cmd"] } else { &["gh"] };
+    let names: &[&str] = if cfg!(windows) {
+        &["gh.exe", "gh.cmd"]
+    } else {
+        &["gh"]
+    };
     if let Some(path) = env("PATH") {
         for dir in std::env::split_paths(&path) {
             for n in names {
@@ -71,9 +83,17 @@ pub fn find_gh(env: &dyn Fn(&str) -> Option<String>) -> Option<PathBuf> {
         }
     }
     let spots: &[&str] = if cfg!(windows) {
-        &["C:\\Program Files\\GitHub CLI\\gh.exe", "C:\\Program Files (x86)\\GitHub CLI\\gh.exe"]
+        &[
+            "C:\\Program Files\\GitHub CLI\\gh.exe",
+            "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
+        ]
     } else {
-        &["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"]
+        &[
+            "/opt/homebrew/bin/gh",
+            "/usr/local/bin/gh",
+            "/usr/bin/gh",
+            "/home/linuxbrew/.linuxbrew/bin/gh",
+        ]
     };
     spots.iter().map(PathBuf::from).find(|p| is_exe(p))
 }
@@ -97,20 +117,37 @@ fn read_capped(mut r: impl Read) -> Vec<u8> {
 
 fn classify(stderr: &str) -> String {
     let low = stderr.to_lowercase();
-    if low.contains("gh auth login") || low.contains("not logged in") || low.contains("authentication") || low.contains("http 401") {
+    if low.contains("gh auth login")
+        || low.contains("not logged in")
+        || low.contains("authentication")
+        || low.contains("http 401")
+    {
         return NOT_LOGGED_IN.into();
     }
     if low.contains("rate limit") || low.contains("http 403") && low.contains("api rate") {
         return RATE_LIMIT.into();
     }
-    let first: String = stderr.lines().find(|l| !l.trim().is_empty()).unwrap_or("gh failed").chars().filter(|c| !c.is_control()).take(120).collect();
+    let first: String = stderr
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("gh failed")
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(120)
+        .collect();
     format!("GH_FAILED:{first}")
 }
 
 /// Runs gh with exactly `args`, a timeout and capped output.
 pub fn run(gh: &PathBuf, args: &[&str], timeout: Duration) -> Result<String, String> {
     let mut cmd = Command::new(gh);
-    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).env("GH_PROMPT_DISABLED", "1").env("GH_NO_UPDATE_NOTIFIER", "1").env("NO_COLOR", "1");
+    cmd.args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env("GH_PROMPT_DISABLED", "1")
+        .env("GH_NO_UPDATE_NOTIFIER", "1")
+        .env("NO_COLOR", "1");
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -121,9 +158,13 @@ pub fn run(gh: &PathBuf, args: &[&str], timeout: Duration) -> Result<String, Str
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0000_0200 | 0x0800_0000); // CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
     }
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { MISSING.to_string() } else { format!("GH_FAILED:{e}") })?;
+    let mut child = cmd.spawn().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            MISSING.to_string()
+        } else {
+            format!("GH_FAILED:{e}")
+        }
+    })?;
     let out = child.stdout.take().map(reader);
     let err = child.stderr.take().map(reader);
     let start = Instant::now();
@@ -162,7 +203,8 @@ fn reader(r: impl Read + Send + 'static) -> std::sync::mpsc::Receiver<Vec<u8>> {
 }
 
 fn collect(rx: Option<std::sync::mpsc::Receiver<Vec<u8>>>) -> Vec<u8> {
-    rx.and_then(|r| r.recv_timeout(Duration::from_secs(2)).ok()).unwrap_or_default()
+    rx.and_then(|r| r.recv_timeout(Duration::from_secs(2)).ok())
+        .unwrap_or_default()
 }
 
 /// Ends gh and every process it started: the whole process group on Unix, `taskkill /T` (the process tree) on Windows.
@@ -173,7 +215,12 @@ fn kill_tree(child: &mut std::process::Child) {
     }
     #[cfg(windows)]
     {
-        let _ = Command::new("taskkill").args(["/T", "/F", "/PID", &child.id().to_string()]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        let _ = Command::new("taskkill")
+            .args(["/T", "/F", "/PID", &child.id().to_string()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     }
     let _ = child.kill();
 }
@@ -201,13 +248,37 @@ pub fn repo_list(gh: &PathBuf, fields: &str, limit: u32, t: Duration) -> Result<
     if !(1..=100).contains(&limit) {
         return Err("GH_FAILED:bad limit".into());
     }
-    run(gh, &["repo", "list", "--limit", &limit.to_string(), "--json", fields], t)
+    run(
+        gh,
+        &[
+            "repo",
+            "list",
+            "--limit",
+            &limit.to_string(),
+            "--json",
+            fields,
+        ],
+        t,
+    )
 }
 
 pub fn run_list(gh: &PathBuf, slug: &str, t: Duration) -> Result<String, String> {
     let (o, r) = split_slug(slug).ok_or_else(|| "GH_FAILED:bad repository name".to_string())?;
     let repo = format!("{o}/{r}");
-    run(gh, &["run", "list", "--repo", &repo, "--limit", "1", "--json", "status,conclusion"], t)
+    run(
+        gh,
+        &[
+            "run",
+            "list",
+            "--repo",
+            &repo,
+            "--limit",
+            "1",
+            "--json",
+            "status,conclusion",
+        ],
+        t,
+    )
 }
 
 #[cfg(test)]
@@ -216,13 +287,50 @@ mod name_tests {
 
     #[test]
     fn names_are_validated() {
-        for ok in ["me/tool", "a-b/c.d_e", "A1/x", "name_company/repo", "a_b-c/x", "9lives/x"] {
+        for ok in [
+            "me/tool",
+            "a-b/c.d_e",
+            "A1/x",
+            "name_company/repo",
+            "a_b-c/x",
+            "9lives/x",
+        ] {
             assert!(split_slug(ok).is_some(), "{ok}");
         }
-        for bad in ["", "me", "me/", "/tool", "-me/tool", "me/-tool", "_me/tool", "me--x/tool", "me-/tool", "me.x/tool", "me@x/tool", "me x/tool", "a/b/c", "me/\u{e9}", "me/..", "me/.", "me/to ol", "me/tool/extra", "me/tool;rm", "me/$(x)", "m e/tool", "me/to\nol", "--repo/x", &format!("{}/x", "a".repeat(40)), &format!("me/{}", "r".repeat(101)), "me/to\u{e9}l"] {
+        for bad in [
+            "",
+            "me",
+            "me/",
+            "/tool",
+            "-me/tool",
+            "me/-tool",
+            "_me/tool",
+            "me--x/tool",
+            "me-/tool",
+            "me.x/tool",
+            "me@x/tool",
+            "me x/tool",
+            "a/b/c",
+            "me/\u{e9}",
+            "me/..",
+            "me/.",
+            "me/to ol",
+            "me/tool/extra",
+            "me/tool;rm",
+            "me/$(x)",
+            "m e/tool",
+            "me/to\nol",
+            "--repo/x",
+            &format!("{}/x", "a".repeat(40)),
+            &format!("me/{}", "r".repeat(101)),
+            "me/to\u{e9}l",
+        ] {
             assert!(split_slug(bad).is_none(), "{bad:?}");
         }
-        assert_eq!(repo_url("me/tool").as_deref(), Some("https://github.com/me/tool"));
+        assert_eq!(
+            repo_url("me/tool").as_deref(),
+            Some("https://github.com/me/tool")
+        );
         assert_eq!(repo_url("me/tool?x=1"), None);
     }
 
@@ -254,7 +362,16 @@ mod tests {
     fn fake(dir: &std::path::Path, body: &str) -> PathBuf {
         let p = dir.join("gh");
         let log = dir.join("args.log");
-        std::fs::write(&p, format!("#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf -- '--\\n' >> '{}'\n{}\n", log.display(), log.display(), body)).unwrap();
+        std::fs::write(
+            &p,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf -- '--\\n' >> '{}'\n{}\n",
+                log.display(),
+                log.display(),
+                body
+            ),
+        )
+        .unwrap();
         std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
         p
     }
@@ -267,9 +384,28 @@ mod tests {
         repo_list(&gh, EXTRA_FIELDS, 50, CALL_TIMEOUT).unwrap();
         user(&gh, CALL_TIMEOUT).unwrap();
         let log = std::fs::read_to_string(d.path().join("args.log")).unwrap();
-        let calls: Vec<Vec<&str>> = log.split("--\n").filter(|c| !c.is_empty()).map(|c| c.lines().collect()).collect();
-        assert_eq!(calls[0], ["run", "list", "--repo", "me/tool", "--limit", "1", "--json", "status,conclusion"]);
-        assert_eq!(calls[1], ["repo", "list", "--limit", "50", "--json", EXTRA_FIELDS]);
+        let calls: Vec<Vec<&str>> = log
+            .split("--\n")
+            .filter(|c| !c.is_empty())
+            .map(|c| c.lines().collect())
+            .collect();
+        assert_eq!(
+            calls[0],
+            [
+                "run",
+                "list",
+                "--repo",
+                "me/tool",
+                "--limit",
+                "1",
+                "--json",
+                "status,conclusion"
+            ]
+        );
+        assert_eq!(
+            calls[1],
+            ["repo", "list", "--limit", "50", "--json", EXTRA_FIELDS]
+        );
         assert_eq!(calls[2], ["api", "user", "--jq", ".login"]);
         // a hostile name never reaches gh
         assert!(run_list(&gh, "me/tool; touch pwned", CALL_TIMEOUT).is_err());
@@ -283,12 +419,21 @@ mod tests {
     fn errors_are_classified() {
         let d = tempfile::tempdir().unwrap();
         let t = Duration::from_secs(5);
-        let gh = fake(d.path(), "echo 'To get started with GitHub CLI, please run:  gh auth login' >&2; exit 4");
+        let gh = fake(
+            d.path(),
+            "echo 'To get started with GitHub CLI, please run:  gh auth login' >&2; exit 4",
+        );
         assert_eq!(user(&gh, t).unwrap_err(), NOT_LOGGED_IN);
-        let gh = fake(d.path(), "echo 'API rate limit exceeded for user' >&2; exit 1");
+        let gh = fake(
+            d.path(),
+            "echo 'API rate limit exceeded for user' >&2; exit 1",
+        );
         assert_eq!(user(&gh, t).unwrap_err(), RATE_LIMIT);
         let gh = fake(d.path(), "echo 'something odd happened' >&2; exit 1");
-        assert_eq!(user(&gh, t).unwrap_err(), "GH_FAILED:something odd happened");
+        assert_eq!(
+            user(&gh, t).unwrap_err(),
+            "GH_FAILED:something odd happened"
+        );
         assert_eq!(user(&d.path().join("nope"), t).unwrap_err(), MISSING);
     }
 
@@ -305,9 +450,16 @@ mod tests {
     fn a_timeout_ends_the_grandchildren_too() {
         let d = tempfile::tempdir().unwrap();
         let pidfile = d.path().join("pid");
-        let gh = fake(d.path(), &format!("sleep 30 &\necho $! > '{}'\nwait", pidfile.display()));
+        let gh = fake(
+            d.path(),
+            &format!("sleep 30 &\necho $! > '{}'\nwait", pidfile.display()),
+        );
         assert_eq!(user(&gh, Duration::from_millis(400)).unwrap_err(), TIMEOUT);
-        let pid: i32 = std::fs::read_to_string(&pidfile).unwrap().trim().parse().unwrap();
+        let pid: i32 = std::fs::read_to_string(&pidfile)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
         let mut alive = true;
         for _ in 0..40 {
             alive = unsafe { libc::kill(pid, 0) } == 0;
@@ -332,7 +484,10 @@ mod tests {
     #[test]
     fn output_is_capped_and_the_pipe_is_drained() {
         let d = tempfile::tempdir().unwrap();
-        let gh = fake(d.path(), "yes 0123456789012345678901234567890123456789 | head -c 12000000");
+        let gh = fake(
+            d.path(),
+            "yes 0123456789012345678901234567890123456789 | head -c 12000000",
+        );
         let out = user(&gh, Duration::from_secs(20)).unwrap();
         assert_eq!(out.len(), MAX_OUTPUT);
     }

@@ -20,7 +20,11 @@ use serde::{Deserialize, Serialize};
 /// for a writer) and, when `follow` is false, O_NOFOLLOW; the opened handle is checked again with fstat.
 pub fn open_regular(p: &Path, follow: bool) -> std::io::Result<fs::File> {
     use std::io::{Error, ErrorKind};
-    let meta = if follow { fs::metadata(p)? } else { fs::symlink_metadata(p)? };
+    let meta = if follow {
+        fs::metadata(p)?
+    } else {
+        fs::symlink_metadata(p)?
+    };
     if !meta.is_file() {
         return Err(Error::new(ErrorKind::InvalidInput, "not a regular file"));
     }
@@ -64,12 +68,20 @@ pub fn valid_name(name: &str) -> bool {
     } else {
         return false;
     };
-    let Some(mid) = rest.strip_suffix(".json") else { return false };
+    let Some(mid) = rest.strip_suffix(".json") else {
+        return false;
+    };
     if mid.is_empty() {
         return true;
     }
     match mid.strip_prefix(".broken-") {
-        Some(tail) => !tail.is_empty() && tail.len() <= 40 && tail.bytes().all(|b| b.is_ascii_digit() || b.is_ascii_lowercase() || b == b'-'),
+        Some(tail) => {
+            !tail.is_empty()
+                && tail.len() <= 40
+                && tail
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || b.is_ascii_lowercase() || b == b'-')
+        }
         None => false,
     }
 }
@@ -127,12 +139,16 @@ fn owned_by_me(_m: &fs::Metadata) -> bool {
 /// notified*.json: an object with a "notified" list; settings*.json: an object; empty (or only white space) is fine too.
 fn is_app_content(name: &str, bytes: &[u8]) -> bool {
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(bytes);
-    let Ok(text) = std::str::from_utf8(bytes) else { return false };
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
     if text.trim().is_empty() {
         return true;
     }
     match serde_json::from_str::<serde_json::Value>(text) {
-        Ok(serde_json::Value::Object(o)) => !name.starts_with("notified") || o.get("ids").is_some_and(|t| t.is_object()),
+        Ok(serde_json::Value::Object(o)) => {
+            !name.starts_with("notified") || o.get("ids").is_some_and(|t| t.is_object())
+        }
         _ => false,
     }
 }
@@ -147,36 +163,69 @@ fn plan_target(p: &Path, name: &str) -> Result<Target, String> {
     let base_dev = fs::metadata(&base).ok().map(|m| identity_of(&m).0);
     let meta = match fs::symlink_metadata(p) {
         Ok(m) => m,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Target { path: p.to_path_buf(), temp_dir: base, identity: None }),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(Target {
+                path: p.to_path_buf(),
+                temp_dir: base,
+                identity: None,
+            })
+        }
         Err(e) => return Err(format!("cannot look at {name}: {e}")),
     };
     if meta.file_type().is_symlink() {
-        let real = p.canonicalize().map_err(|_| format!("{name} is a link to a file that does not exist; nothing was written"))?;
-        let tm = fs::metadata(&real).map_err(|e| format!("cannot look at the file {name} links to: {e}"))?;
+        let real = p.canonicalize().map_err(|_| {
+            format!("{name} is a link to a file that does not exist; nothing was written")
+        })?;
+        let tm = fs::metadata(&real)
+            .map_err(|e| format!("cannot look at the file {name} links to: {e}"))?;
         if !tm.is_file() {
-            return Err(format!("{name} is a link to something that is not a regular file; nothing was written"));
+            return Err(format!(
+                "{name} is a link to something that is not a regular file; nothing was written"
+            ));
         }
         if !owned_by_me(&tm) {
-            return Err(format!("{name} is a link to a file that belongs to another user; nothing was written"));
+            return Err(format!(
+                "{name} is a link to a file that belongs to another user; nothing was written"
+            ));
         }
         if tm.len() > MAX_READ_BYTES {
-            return Err(format!("{name} is a link to a file larger than {} MB; nothing was written", MAX_READ_BYTES / 1024 / 1024));
+            return Err(format!(
+                "{name} is a link to a file larger than {} MB; nothing was written",
+                MAX_READ_BYTES / 1024 / 1024
+            ));
         }
-        let bytes = open_regular(&real, true).and_then(|f| {
-            let mut b = Vec::new();
-            f.take(MAX_READ_BYTES + 1).read_to_end(&mut b).map(|_| b)
-        }).map_err(|e| format!("cannot read the file {name} links to: {e}"))?;
+        let bytes = open_regular(&real, true)
+            .and_then(|f| {
+                let mut b = Vec::new();
+                f.take(MAX_READ_BYTES + 1).read_to_end(&mut b).map(|_| b)
+            })
+            .map_err(|e| format!("cannot read the file {name} links to: {e}"))?;
         if !is_app_content(name, &bytes) {
             return Err(format!("{name} is a link to a file that is not a Agents Bar data file; nothing was written"));
         }
-        let parent = real.parent().ok_or("no folder for the linked file")?.to_path_buf();
+        let parent = real
+            .parent()
+            .ok_or("no folder for the linked file")?
+            .to_path_buf();
         let target_dev = fs::metadata(&parent).ok().map(|m| identity_of(&m).0);
         // the temp file goes in the data folder when that is the same filesystem; in the linked file's folder otherwise
-        let temp_dir = if base_dev.is_some() && base_dev == target_dev { base } else { parent };
-        return Ok(Target { path: real, temp_dir, identity: Some(identity_of(&tm)) });
+        let temp_dir = if base_dev.is_some() && base_dev == target_dev {
+            base
+        } else {
+            parent
+        };
+        return Ok(Target {
+            path: real,
+            temp_dir,
+            identity: Some(identity_of(&tm)),
+        });
     }
     if meta.is_file() {
-        return Ok(Target { path: p.to_path_buf(), temp_dir: base, identity: Some(identity_of(&meta)) });
+        return Ok(Target {
+            path: p.to_path_buf(),
+            temp_dir: base,
+            identity: Some(identity_of(&meta)),
+        });
     }
     Err(format!("{name} is not a regular file; nothing was written"))
 }
@@ -207,22 +256,36 @@ fn stamp_of(m: &fs::Metadata) -> Stamp {
     #[cfg(unix)]
     let (ctime_us, ino) = {
         use std::os::unix::fs::MetadataExt;
-        (m.ctime() * 1_000_000 + m.ctime_nsec() / 1000, m.ino().to_string())
+        (
+            m.ctime() * 1_000_000 + m.ctime_nsec() / 1000,
+            m.ino().to_string(),
+        )
     };
     #[cfg(not(unix))]
     let (ctime_us, ino) = (us(m.created()), String::new());
-    Stamp { size: m.len(), mtime_us: us(m.modified()), ctime_us, ino }
+    Stamp {
+        size: m.len(),
+        mtime_us: us(m.modified()),
+        ctime_us,
+        ino,
+    }
 }
 
-pub const NOT_UTF8: &str = "is not UTF-8 text; if you saved it as UTF-16 (some Windows editors do) save it again as UTF-8";
+pub const NOT_UTF8: &str =
+    "is not UTF-8 text; if you saved it as UTF-16 (some Windows editors do) save it again as UTF-8";
 
 /// The file as text. A UTF-8 byte order mark is dropped from the returned text (the file itself is not touched).
 pub fn read(dir: &Path, name: &str) -> Result<Option<String>, String> {
     let p = resolve(dir, name)?;
     match fs::metadata(&p) {
-        Ok(m) if !m.is_file() => return Err(format!("{name} is not a regular file; it is not read")),
+        Ok(m) if !m.is_file() => {
+            return Err(format!("{name} is not a regular file; it is not read"))
+        }
         Ok(m) if m.len() > MAX_READ_BYTES => {
-            return Err(format!("{name} is larger than {} MB; it is not loaded", MAX_READ_BYTES / 1024 / 1024));
+            return Err(format!(
+                "{name} is larger than {} MB; it is not loaded",
+                MAX_READ_BYTES / 1024 / 1024
+            ));
         }
         Ok(_) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -235,10 +298,17 @@ pub fn read(dir: &Path, name: &str) -> Result<Option<String>, String> {
         Err(e) => return Err(format!("cannot read {name}: {e}")),
     }
     if bytes.len() as u64 > MAX_READ_BYTES {
-        return Err(format!("{name} is larger than {} MB; it is not loaded", MAX_READ_BYTES / 1024 / 1024));
+        return Err(format!(
+            "{name} is larger than {} MB; it is not loaded",
+            MAX_READ_BYTES / 1024 / 1024
+        ));
     }
-    let slice = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(&bytes);
-    String::from_utf8(slice.to_vec()).map(Some).map_err(|_| format!("{name} {NOT_UTF8}"))
+    let slice = bytes
+        .strip_prefix(&[0xEF, 0xBB, 0xBF][..])
+        .unwrap_or(&bytes);
+    String::from_utf8(slice.to_vec())
+        .map(Some)
+        .map_err(|_| format!("{name} {NOT_UTF8}"))
 }
 
 pub fn stat(dir: &Path, name: &str) -> Result<Option<Stamp>, String> {
@@ -262,7 +332,11 @@ pub fn is_transient(e: &std::io::Error) -> bool {
 pub const RETRY_DELAYS_MS: [u64; 5] = [20, 50, 100, 200, 400];
 
 /// Runs `op`, retrying after each delay while it fails with a transient error. `sleep` is injectable for tests.
-pub fn retry_transient<T>(mut op: impl FnMut() -> std::io::Result<T>, delays_ms: &[u64], mut sleep: impl FnMut(Duration)) -> std::io::Result<T> {
+pub fn retry_transient<T>(
+    mut op: impl FnMut() -> std::io::Result<T>,
+    delays_ms: &[u64],
+    mut sleep: impl FnMut(Duration),
+) -> std::io::Result<T> {
     let mut i = 0;
     loop {
         match op() {
@@ -290,7 +364,9 @@ impl Lock {
             use std::os::unix::fs::OpenOptionsExt;
             o.custom_flags(libc::O_NONBLOCK); // a FIFO planted as the lock file must not block the open
         }
-        let Ok(f) = o.open(&lock_path) else { return Lock(None) };
+        let Ok(f) = o.open(&lock_path) else {
+            return Lock(None);
+        };
         if !f.metadata().map(|m| m.is_file()).unwrap_or(false) {
             return Lock(None);
         }
@@ -298,7 +374,9 @@ impl Lock {
         loop {
             match f.try_lock() {
                 Ok(()) => return Lock(Some(f)),
-                Err(fs::TryLockError::WouldBlock) if t0.elapsed() < Duration::from_secs(5) => std::thread::sleep(Duration::from_millis(5)),
+                Err(fs::TryLockError::WouldBlock) if t0.elapsed() < Duration::from_secs(5) => {
+                    std::thread::sleep(Duration::from_millis(5))
+                }
                 Err(_) => return Lock(None),
             }
         }
@@ -314,7 +392,12 @@ impl Drop for Lock {
 }
 
 /// `check`: None = no compare, Some(None) = the file must not exist, Some(Some(stamp)) = it must still be exactly that file.
-pub fn write(dir: &Path, name: &str, text: &str, check: Option<Option<Stamp>>) -> Result<(), String> {
+pub fn write(
+    dir: &Path,
+    name: &str,
+    text: &str,
+    check: Option<Option<Stamp>>,
+) -> Result<(), String> {
     let p = resolve(dir, name)?;
     fs::create_dir_all(dir).map_err(|e| format!("cannot create the data folder: {e}"))?;
     let target = plan_target(&p, name)?; // refuses before any file (even the lock file) is created
@@ -330,10 +413,18 @@ pub fn write(dir: &Path, name: &str, text: &str, check: Option<Option<Stamp>>) -
             return Err(format!("{name} is read-only; nothing was saved"));
         }
     }
-    let nanos = std::time::SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    let tmp = target.temp_dir.join(format!(".{name}.tmp-{}-{nanos}", std::process::id()));
+    let nanos = std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = target
+        .temp_dir
+        .join(format!(".{name}.tmp-{}-{nanos}", std::process::id()));
     let result = (|| -> std::io::Result<()> {
-        let mut f = fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)?;
         f.write_all(text.as_bytes())?;
         f.sync_all()?;
         drop(f);
@@ -350,7 +441,11 @@ pub fn write(dir: &Path, name: &str, text: &str, check: Option<Option<Stamp>>) -
             let _ = fs::set_permissions(&tmp, perms);
         }
         still_same(&target).map_err(std::io::Error::other)?;
-        retry_transient(|| fs::rename(&tmp, &target.path), &RETRY_DELAYS_MS, std::thread::sleep)?;
+        retry_transient(
+            || fs::rename(&tmp, &target.path),
+            &RETRY_DELAYS_MS,
+            std::thread::sleep,
+        )?;
         #[cfg(unix)]
         {
             if let Some(d) = target.path.parent().and_then(|d| fs::File::open(d).ok()) {
@@ -376,14 +471,22 @@ pub fn move_aside(dir: &Path, name: &str, backup: &str) -> Result<String, String
     }
     let stem = backup.strip_suffix(".json").unwrap_or(backup);
     for n in 0..100u32 {
-        let nanos = std::time::SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
         let unique = format!("{stem}-{:x}{n}.json", nanos & 0xffff_ffff);
-        let to = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()).join(&unique);
+        let to = dir
+            .canonicalize()
+            .unwrap_or_else(|_| dir.to_path_buf())
+            .join(&unique);
         // symlink_metadata sees a dangling symlink too; a name that exists in any form is skipped
         if fs::symlink_metadata(&to).is_ok() {
             continue;
         }
-        return fs::rename(&from, &to).map(|_| unique).map_err(|e| format!("could not keep a backup of {name}: {e}"));
+        return fs::rename(&from, &to)
+            .map(|_| unique)
+            .map_err(|e| format!("could not keep a backup of {name}: {e}"));
     }
     Err("could not find an unused backup name".into())
 }
@@ -394,16 +497,39 @@ mod tests {
 
     #[test]
     fn names_are_checked() {
-        for ok in ["notified.json", "settings.json", "notified.broken-1760000000000-ab12cd.json", "settings.broken-1760000000000.json"] {
+        for ok in [
+            "notified.json",
+            "settings.json",
+            "notified.broken-1760000000000-ab12cd.json",
+            "settings.broken-1760000000000.json",
+        ] {
             assert!(valid_name(ok), "{ok}");
         }
         for bad in [
-            "", "../notified.json", "notified.json/", "a/notified.json", "..", ".", "notified.json.bak", "other.json", "notified.broken-.json", "notified.json\n",
-            "C:\\x.json", "notified\0.json", "notified.broken-UPPER.json", "notified.broken-../x.json", "/etc/passwd", "notified.json ", "NOTIFIED.json",
+            "",
+            "../notified.json",
+            "notified.json/",
+            "a/notified.json",
+            "..",
+            ".",
+            "notified.json.bak",
+            "other.json",
+            "notified.broken-.json",
+            "notified.json\n",
+            "C:\\x.json",
+            "notified\0.json",
+            "notified.broken-UPPER.json",
+            "notified.broken-../x.json",
+            "/etc/passwd",
+            "notified.json ",
+            "NOTIFIED.json",
         ] {
             assert!(!valid_name(bad), "{bad:?}");
         }
-        assert!(!valid_name(&format!("notified.broken-{}.json", "a".repeat(41))));
+        assert!(!valid_name(&format!(
+            "notified.broken-{}.json",
+            "a".repeat(41)
+        )));
     }
 
     #[test]
@@ -411,13 +537,21 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let outside = d.path().join("outside.json");
         let data = d.path().join("data");
-        for bad in ["../outside.json", "..\\outside.json", "notified.json/../../outside.json", "/tmp/x.json"] {
+        for bad in [
+            "../outside.json",
+            "..\\outside.json",
+            "notified.json/../../outside.json",
+            "/tmp/x.json",
+        ] {
             assert!(write(&data, bad, "x", None).is_err(), "{bad}");
             assert!(read(&data, bad).is_err(), "{bad}");
             assert!(stat(&data, bad).is_err(), "{bad}");
         }
         assert!(!outside.exists());
-        assert!(!data.exists(), "a refused write must not even create the folder");
+        assert!(
+            !data.exists(),
+            "a refused write must not even create the folder"
+        );
     }
 
     #[test]
@@ -427,15 +561,28 @@ mod tests {
         assert_eq!(read(&data, "notified.json").unwrap(), None);
         assert_eq!(stat(&data, "notified.json").unwrap(), None);
         write(&data, "notified.json", "{\"ids\":{}}\n", None).unwrap();
-        assert_eq!(read(&data, "notified.json").unwrap().as_deref(), Some("{\"ids\":{}}\n"));
+        assert_eq!(
+            read(&data, "notified.json").unwrap().as_deref(),
+            Some("{\"ids\":{}}\n")
+        );
         let s = stat(&data, "notified.json").unwrap().unwrap();
         assert_eq!(s.size, 11);
         write(&data, "notified.json", "{\"ids\":{\"a\":1}}\n", None).unwrap();
         let s2 = stat(&data, "notified.json").unwrap().unwrap();
         assert_eq!(s2.size, 16);
-        let mut names: Vec<_> = fs::read_dir(&data).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().to_string()).collect();
+        let mut names: Vec<_> = fs::read_dir(&data)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
         names.sort();
-        assert_eq!(names, vec!["notified.json".to_string(), "notified.json.lock".to_string()], "no temp files left (the .lock file is the one tick.py uses too)");
+        assert_eq!(
+            names,
+            vec![
+                "notified.json".to_string(),
+                "notified.json.lock".to_string()
+            ],
+            "no temp files left (the .lock file is the one tick.py uses too)"
+        );
     }
 
     #[cfg(unix)]
@@ -448,9 +595,15 @@ mod tests {
         fs::write(&real, "{\"ids\":{}}").unwrap();
         std::os::unix::fs::symlink(&real, data.join("notified.json")).unwrap();
         write(&data, "notified.json", "{\"ids\":{\"a\":1}}", None).unwrap();
-        assert!(fs::symlink_metadata(data.join("notified.json")).unwrap().file_type().is_symlink());
+        assert!(fs::symlink_metadata(data.join("notified.json"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
         assert_eq!(fs::read_to_string(&real).unwrap(), "{\"ids\":{\"a\":1}}");
-        assert_eq!(read(&data, "notified.json").unwrap().as_deref(), Some("{\"ids\":{\"a\":1}}"));
+        assert_eq!(
+            read(&data, "notified.json").unwrap().as_deref(),
+            Some("{\"ids\":{\"a\":1}}")
+        );
         // an empty file behind the link is fine too (a fresh Dropbox / iCloud placeholder)
         let empty = d.path().join("empty.json");
         fs::write(&empty, "").unwrap();
@@ -459,7 +612,12 @@ mod tests {
         write(&data, "settings.json", "{}", None).unwrap();
         assert_eq!(fs::read_to_string(&empty).unwrap(), "{}");
         // no temp file is left in either folder
-        let leftovers: Vec<_> = fs::read_dir(d.path()).unwrap().chain(fs::read_dir(&data).unwrap()).map(|e| e.unwrap().file_name().to_string_lossy().to_string()).filter(|n| n.contains(".tmp-")).collect();
+        let leftovers: Vec<_> = fs::read_dir(d.path())
+            .unwrap()
+            .chain(fs::read_dir(&data).unwrap())
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .filter(|n| n.contains(".tmp-"))
+            .collect();
         assert!(leftovers.is_empty(), "{leftovers:?}");
     }
 
@@ -485,10 +643,24 @@ mod tests {
             let _ = fs::remove_file(&link);
             symlink(&victim, &link).unwrap();
             let e = write(&data, "notified.json", "{\"ids\":{}}", None).unwrap_err();
-            assert!(e.contains("not a Agents Bar data file") && e.contains("nothing was written"), "{n}: {e}");
-            assert_eq!(&fs::read(&victim).unwrap(), content, "{n} must be untouched");
-            assert!(fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
-            assert!(!data.join("notified.json.lock").exists() && !d.path().join(format!("{n}.lock")).exists(), "no stray lock file next to the victim");
+            assert!(
+                e.contains("not a Agents Bar data file") && e.contains("nothing was written"),
+                "{n}: {e}"
+            );
+            assert_eq!(
+                &fs::read(&victim).unwrap(),
+                content,
+                "{n} must be untouched"
+            );
+            assert!(fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink());
+            assert!(
+                !data.join("notified.json.lock").exists()
+                    && !d.path().join(format!("{n}.lock")).exists(),
+                "no stray lock file next to the victim"
+            );
         }
         // the settings kind is validated as settings: a notified-shaped file is fine for settings, a list is not
         let list = d.path().join("list.json");
@@ -516,8 +688,13 @@ mod tests {
         let link = data.join("notified.json");
         // dangling
         symlink(d.path().join("nowhere.json"), &link).unwrap();
-        assert!(write(&data, "notified.json", "x", None).unwrap_err().contains("does not exist"));
-        assert!(!d.path().join("nowhere.json").exists(), "a dangling link is not written through");
+        assert!(write(&data, "notified.json", "x", None)
+            .unwrap_err()
+            .contains("does not exist"));
+        assert!(
+            !d.path().join("nowhere.json").exists(),
+            "a dangling link is not written through"
+        );
         fs::remove_file(&link).unwrap();
         // a loop
         symlink("notified.json", &link).unwrap();
@@ -527,22 +704,34 @@ mod tests {
         let dd = d.path().join("somedir");
         fs::create_dir_all(&dd).unwrap();
         symlink(&dd, &link).unwrap();
-        assert!(write(&data, "notified.json", "x", None).unwrap_err().contains("not a regular file"));
+        assert!(write(&data, "notified.json", "x", None)
+            .unwrap_err()
+            .contains("not a regular file"));
         fs::remove_file(&link).unwrap();
         // device
         symlink("/dev/null", &link).unwrap();
-        assert!(write(&data, "notified.json", "x", None).unwrap_err().contains("not a regular file"));
+        assert!(write(&data, "notified.json", "x", None)
+            .unwrap_err()
+            .contains("not a regular file"));
         assert!(fs::metadata("/dev/null").unwrap().len() == 0);
         fs::remove_file(&link).unwrap();
         // fifo
         let fifo = d.path().join("fifo");
-        assert!(std::process::Command::new("mkfifo").arg(&fifo).status().map(|s| s.success()).unwrap_or(false));
+        assert!(std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false));
         symlink(&fifo, &link).unwrap();
-        assert!(write(&data, "notified.json", "x", None).unwrap_err().contains("not a regular file"));
+        assert!(write(&data, "notified.json", "x", None)
+            .unwrap_err()
+            .contains("not a regular file"));
         // a directory standing where the file should be
         fs::remove_file(&link).unwrap();
         fs::create_dir_all(data.join("notified.json")).unwrap();
-        assert!(write(&data, "notified.json", "x", None).unwrap_err().contains("not a regular file"));
+        assert!(write(&data, "notified.json", "x", None)
+            .unwrap_err()
+            .contains("not a regular file"));
     }
 
     #[cfg(unix)]
@@ -559,7 +748,10 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         symlink(hosts, d.path().join("notified.json")).unwrap();
         let e = write(d.path(), "notified.json", "{\"ids\":{}}", None).unwrap_err();
-        assert!(e.contains("another user") || e.contains("not a Agents Bar data file"), "{e}");
+        assert!(
+            e.contains("another user") || e.contains("not a Agents Bar data file"),
+            "{e}"
+        );
     }
 
     #[cfg(unix)]
@@ -572,10 +764,21 @@ mod tests {
         fs::write(&victim, "precious").unwrap();
         fs::hard_link(&victim, data.join("notified.json")).unwrap();
         write(&data, "notified.json", "{\"ids\":{}}", None).unwrap();
-        assert_eq!(fs::read_to_string(&victim).unwrap(), "precious", "the other name of the file is untouched");
-        assert_eq!(fs::read_to_string(data.join("notified.json")).unwrap(), "{\"ids\":{}}");
+        assert_eq!(
+            fs::read_to_string(&victim).unwrap(),
+            "precious",
+            "the other name of the file is untouched"
+        );
+        assert_eq!(
+            fs::read_to_string(data.join("notified.json")).unwrap(),
+            "{\"ids\":{}}"
+        );
         use std::os::unix::fs::MetadataExt;
-        assert_eq!(fs::metadata(data.join("notified.json")).unwrap().nlink(), 1, "the data file is its own file now");
+        assert_eq!(
+            fs::metadata(data.join("notified.json")).unwrap().nlink(),
+            1,
+            "the data file is its own file now"
+        );
     }
 
     #[cfg(unix)]
@@ -588,7 +791,10 @@ mod tests {
         let data = d.path().join("data-link");
         symlink(&real_dir, &data).unwrap();
         write(&data, "notified.json", "{\"ids\":{}}", None).unwrap();
-        assert_eq!(fs::read_to_string(real_dir.join("notified.json")).unwrap(), "{\"ids\":{}}");
+        assert_eq!(
+            fs::read_to_string(real_dir.join("notified.json")).unwrap(),
+            "{\"ids\":{}}"
+        );
         let victim = d.path().join("zshrc");
         fs::write(&victim, "keep").unwrap();
         fs::remove_file(real_dir.join("notified.json")).unwrap();
@@ -618,7 +824,10 @@ mod tests {
         assert_ne!(old_id, new_id, "two live files never share an identity");
         fs::rename(&other, &real).unwrap();
         assert_eq!(identity_of(&fs::metadata(&real).unwrap()), new_id);
-        assert!(still_same(&t).is_err(), "the validated file was replaced by another one: refused");
+        assert!(
+            still_same(&t).is_err(),
+            "the validated file was replaced by another one: refused"
+        );
         let t2 = plan_target(&link, "notified.json").unwrap();
         fs::remove_file(&real).unwrap();
         std::os::unix::fs::symlink(d.path().join("elsewhere.txt"), &real).unwrap();
@@ -638,7 +847,13 @@ mod tests {
         symlink(&victim, d.path().join("notified.json")).unwrap();
         let n = move_aside(d.path(), "notified.json", "notified.broken-1.json").unwrap();
         assert_eq!(fs::read_to_string(&victim).unwrap(), "precious");
-        assert!(fs::symlink_metadata(d.path().join(&n)).unwrap().file_type().is_symlink(), "the link itself was renamed");
+        assert!(
+            fs::symlink_metadata(d.path().join(&n))
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "the link itself was renamed"
+        );
         assert!(!d.path().join("notified.json").exists());
         // a planted link where the backup would go is skipped, not followed
         fs::write(d.path().join("notified.json"), "bad").unwrap();
@@ -659,11 +874,21 @@ mod tests {
         write(d.path(), "notified.json", "second", None).unwrap();
         let second = move_aside(d.path(), "notified.json", "notified.broken-1-abc.json").unwrap();
         assert_ne!(first, second);
-        assert_eq!(fs::read_to_string(d.path().join(&first)).unwrap(), "broken", "the first backup is untouched");
-        assert!(move_aside(d.path(), "notified.json", "notified.broken-1-abc.json").is_err(), "source is gone now");
+        assert_eq!(
+            fs::read_to_string(d.path().join(&first)).unwrap(),
+            "broken",
+            "the first backup is untouched"
+        );
+        assert!(
+            move_aside(d.path(), "notified.json", "notified.broken-1-abc.json").is_err(),
+            "source is gone now"
+        );
         write(d.path(), "notified.json", "third", None).unwrap();
         assert!(move_aside(d.path(), "notified.json", "settings.json").is_err());
-        assert_eq!(fs::read_to_string(d.path().join("notified.json")).unwrap(), "third");
+        assert_eq!(
+            fs::read_to_string(d.path().join("notified.json")).unwrap(),
+            "third"
+        );
     }
 
     #[cfg(unix)]
@@ -675,8 +900,16 @@ mod tests {
         std::os::unix::fs::symlink(&victim, d.path().join("notified.broken-1.json")).unwrap();
         let name = move_aside(d.path(), "notified.json", "notified.broken-1.json").unwrap();
         assert_ne!(name, "notified.broken-1.json");
-        assert!(!victim.exists(), "the symlink target was not created or written");
-        assert!(fs::symlink_metadata(d.path().join("notified.broken-1.json")).unwrap().file_type().is_symlink());
+        assert!(
+            !victim.exists(),
+            "the symlink target was not created or written"
+        );
+        assert!(
+            fs::symlink_metadata(d.path().join("notified.broken-1.json"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
     }
 
     #[test]
@@ -703,17 +936,28 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let p = d.path().join("notified.json");
         fs::write(&p, b"\xEF\xBB\xBF{\"ids\":{}}").unwrap();
-        assert_eq!(read(d.path(), "notified.json").unwrap().as_deref(), Some("{\"ids\":{}}"));
+        assert_eq!(
+            read(d.path(), "notified.json").unwrap().as_deref(),
+            Some("{\"ids\":{}}")
+        );
         assert_eq!(fs::read(&p).unwrap(), b"\xEF\xBB\xBF{\"ids\":{}}");
     }
 
     #[test]
     fn utf16_gives_a_clear_error() {
         let d = tempfile::tempdir().unwrap();
-        let bytes: Vec<u8> = [0xFF, 0xFE].into_iter().chain("{\"ids\":{}}".encode_utf16().flat_map(|u| u.to_le_bytes())).collect();
+        let bytes: Vec<u8> = [0xFF, 0xFE]
+            .into_iter()
+            .chain("{\"ids\":{}}".encode_utf16().flat_map(|u| u.to_le_bytes()))
+            .collect();
         fs::write(d.path().join("notified.json"), bytes).unwrap();
         let e = read(d.path(), "notified.json").unwrap_err();
-        assert!(e.contains("not UTF-8 text") && e.contains("UTF-16") && e.contains("save it again as UTF-8"), "{e}");
+        assert!(
+            e.contains("not UTF-8 text")
+                && e.contains("UTF-16")
+                && e.contains("save it again as UTF-8"),
+            "{e}"
+        );
     }
 
     #[test]
@@ -724,7 +968,10 @@ mod tests {
         let e = read(d.path(), "notified.json").unwrap_err();
         assert!(e.contains("larger than 32 MB"), "{e}");
         f.set_len(MAX_READ_BYTES).unwrap();
-        assert!(read(d.path(), "notified.json").is_ok(), "exactly at the cap is still read");
+        assert!(
+            read(d.path(), "notified.json").is_ok(),
+            "exactly at the cap is still read"
+        );
     }
 
     /// Unix: an external edit that keeps size AND mtime still changes the change time (ctime) or the inode, so the stamp differs.
@@ -733,7 +980,12 @@ mod tests {
         let mt = fs::metadata(p).unwrap().modified().unwrap();
         std::thread::sleep(Duration::from_millis(20));
         fs::write(p, "TWO").unwrap();
-        fs::OpenOptions::new().write(true).open(p).unwrap().set_modified(mt).unwrap();
+        fs::OpenOptions::new()
+            .write(true)
+            .open(p)
+            .unwrap()
+            .set_modified(mt)
+            .unwrap();
         let after = stat(p.parent().unwrap(), "notified.json").unwrap().unwrap();
         assert_eq!((after.size, after.mtime_us), (fresh.size, fresh.mtime_us));
         assert_ne!(&after, fresh, "ctime (or inode) tells the two apart");
@@ -748,25 +1000,43 @@ mod tests {
         let after = stat(p.parent().unwrap(), "notified.json").unwrap().unwrap();
         assert_ne!(&after, fresh, "a different size is noticed");
         let same_size = fs::File::options().write(true).open(p).unwrap();
-        same_size.set_modified(std::time::UNIX_EPOCH + Duration::from_secs(1_000_000_000)).unwrap(); // other mtime, set explicitly
+        same_size
+            .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(1_000_000_000))
+            .unwrap(); // other mtime, set explicitly
         drop(same_size);
         let moved = stat(p.parent().unwrap(), "notified.json").unwrap().unwrap();
-        assert_ne!(moved.mtime_us, after.mtime_us, "a different mtime is noticed");
+        assert_ne!(
+            moved.mtime_us, after.mtime_us,
+            "a different mtime is noticed"
+        );
     }
 
     #[test]
     fn compare_and_swap_refuses_when_the_file_changed() {
         let d = tempfile::tempdir().unwrap();
         write(d.path(), "notified.json", "one", Some(None)).unwrap(); // must not exist: ok
-        assert_eq!(write(d.path(), "notified.json", "x", Some(None)).unwrap_err(), CONFLICT);
+        assert_eq!(
+            write(d.path(), "notified.json", "x", Some(None)).unwrap_err(),
+            CONFLICT
+        );
         let seen = stat(d.path(), "notified.json").unwrap().unwrap();
         write(d.path(), "notified.json", "two", Some(Some(seen.clone()))).unwrap();
-        assert_eq!(write(d.path(), "notified.json", "three", Some(Some(seen))).unwrap_err(), CONFLICT, "the stamp is stale now");
-        assert_eq!(read(d.path(), "notified.json").unwrap().as_deref(), Some("two"));
+        assert_eq!(
+            write(d.path(), "notified.json", "three", Some(Some(seen))).unwrap_err(),
+            CONFLICT,
+            "the stamp is stale now"
+        );
+        assert_eq!(
+            read(d.path(), "notified.json").unwrap().as_deref(),
+            Some("two")
+        );
         let fresh = stat(d.path(), "notified.json").unwrap().unwrap();
         let p = d.path().join("notified.json");
         in_place_edit_is_noticed(&p, &fresh);
-        assert_eq!(write(d.path(), "notified.json", "four", Some(Some(fresh))).unwrap_err(), CONFLICT);
+        assert_eq!(
+            write(d.path(), "notified.json", "four", Some(Some(fresh))).unwrap_err(),
+            CONFLICT
+        );
         write(d.path(), "notified.json", "five", None).unwrap();
     }
 
@@ -781,7 +1051,10 @@ mod tests {
         let e = write(d.path(), "notified.json", "b", None).unwrap_err();
         assert!(e.contains("read-only"), "{e}");
         assert_eq!(fs::read_to_string(&p).unwrap(), "a");
-        assert_eq!(fs::metadata(&p).unwrap().permissions().mode() & 0o777, 0o444);
+        assert_eq!(
+            fs::metadata(&p).unwrap().permissions().mode() & 0o777,
+            0o444
+        );
     }
 
     #[test]
@@ -792,7 +1065,11 @@ mod tests {
         let r = retry_transient(
             || {
                 n += 1;
-                if n < 4 { Err(Error::from(ErrorKind::PermissionDenied)) } else { Ok(n) }
+                if n < 4 {
+                    Err(Error::from(ErrorKind::PermissionDenied))
+                } else {
+                    Ok(n)
+                }
             },
             &RETRY_DELAYS_MS,
             |d| slept.push(d.as_millis() as u64),
@@ -801,12 +1078,20 @@ mod tests {
         assert_eq!(slept, vec![20, 50, 100]);
         // gives up after five retries
         let mut slept = Vec::new();
-        let r: std::io::Result<()> = retry_transient(|| Err(Error::from(ErrorKind::PermissionDenied)), &RETRY_DELAYS_MS, |d| slept.push(d.as_millis() as u64));
+        let r: std::io::Result<()> = retry_transient(
+            || Err(Error::from(ErrorKind::PermissionDenied)),
+            &RETRY_DELAYS_MS,
+            |d| slept.push(d.as_millis() as u64),
+        );
         assert!(r.is_err());
         assert_eq!(slept, vec![20, 50, 100, 200, 400]);
         // an error that is not transient is returned at once
         let mut slept = Vec::new();
-        let r: std::io::Result<()> = retry_transient(|| Err(Error::from(ErrorKind::NotFound)), &RETRY_DELAYS_MS, |d| slept.push(d.as_millis() as u64));
+        let r: std::io::Result<()> = retry_transient(
+            || Err(Error::from(ErrorKind::NotFound)),
+            &RETRY_DELAYS_MS,
+            |d| slept.push(d.as_millis() as u64),
+        );
         assert!(r.is_err() && slept.is_empty());
         #[cfg(windows)]
         {
@@ -814,7 +1099,6 @@ mod tests {
             assert!(is_transient(&Error::from_raw_os_error(5)));
         }
     }
-
 
     // ---- stamps survive JSON exactly
 
@@ -835,7 +1119,11 @@ mod tests {
             let stamp = Stamp {
                 size: r.next() % (1u64 << 40),
                 // realistic file times: 2001 .. 2100, any microsecond; also the odd far-past and far-future one
-                mtime_us: if i % 1000 == 0 { -((r.next() % (1 << 50)) as i64) } else { 1_000_000_000_000_000 + (r.next() % 3_000_000_000_000_000) as i64 },
+                mtime_us: if i % 1000 == 0 {
+                    -((r.next() % (1 << 50)) as i64)
+                } else {
+                    1_000_000_000_000_000 + (r.next() % 3_000_000_000_000_000) as i64
+                },
                 ctime_us: 1_000_000_000_000_000 + (r.next() % 3_000_000_000_000_000) as i64,
                 ino: (r.next() % (1u64 << 60)).to_string(),
             };
@@ -843,7 +1131,10 @@ mod tests {
             let back: Stamp = serde_json::from_str(&json).unwrap();
             assert_eq!(back, stamp, "{json}");
             // the page parses it with JSON.parse (a double) and writes it back: integers below 2^53 are exact there
-            assert!(stamp.mtime_us.unsigned_abs() < (1u64 << 53) && stamp.ctime_us.unsigned_abs() < (1u64 << 53));
+            assert!(
+                stamp.mtime_us.unsigned_abs() < (1u64 << 53)
+                    && stamp.ctime_us.unsigned_abs() < (1u64 << 53)
+            );
             let via_f64 = stamp.mtime_us as f64 as i64;
             assert_eq!(via_f64, stamp.mtime_us);
         }
@@ -858,10 +1149,19 @@ mod tests {
         for i in 0..2000 {
             let seen_json = serde_json::to_string(&seen).unwrap();
             let expected: Option<Stamp> = serde_json::from_str(&seen_json).unwrap();
-            write(d.path(), "notified.json", &format!("{{\"ids\":{{}},\"n\":{i}}}"), Some(expected)).unwrap_or_else(|e| panic!("iteration {i}: {e}"));
+            write(
+                d.path(),
+                "notified.json",
+                &format!("{{\"ids\":{{}},\"n\":{i}}}"),
+                Some(expected),
+            )
+            .unwrap_or_else(|e| panic!("iteration {i}: {e}"));
             seen = stat(d.path(), "notified.json").unwrap();
         }
-        assert_eq!(read(d.path(), "notified.json").unwrap().unwrap(), "{\"ids\":{},\"n\":1999}");
+        assert_eq!(
+            read(d.path(), "notified.json").unwrap().unwrap(),
+            "{\"ids\":{},\"n\":1999}"
+        );
     }
 
     // ---- special files must not block the app
@@ -879,7 +1179,8 @@ mod tests {
         std::thread::spawn(move || {
             let _ = tx.send(f());
         });
-        rx.recv_timeout(Duration::from_secs(10)).expect("the call blocked on a special file")
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("the call blocked on a special file")
     }
 
     #[cfg(unix)]
@@ -892,7 +1193,10 @@ mod tests {
             let e = within_10s(move || read(&dir, name)).unwrap_err();
             assert!(e.contains("not a regular file"), "{name}: {e}");
             let dir = d.path().to_path_buf();
-            assert!(within_10s(move || stat(&dir, name)).is_ok(), "stat of a FIFO does not block");
+            assert!(
+                within_10s(move || stat(&dir, name)).is_ok(),
+                "stat of a FIFO does not block"
+            );
             let dir = d.path().to_path_buf();
             let w = within_10s(move || write(&dir, name, "{}", None)).unwrap_err();
             assert!(w.contains("not a regular file"), "{name}: {w}");
@@ -909,7 +1213,10 @@ mod tests {
         mkfifo(&lock);
         let dir = d.path().to_path_buf();
         within_10s(move || write(&dir, "notified.json", "{\"ids\":{\"a\":1}}", None)).unwrap();
-        assert_eq!(read(d.path(), "notified.json").unwrap().as_deref(), Some("{\"ids\":{\"a\":1}}"));
+        assert_eq!(
+            read(d.path(), "notified.json").unwrap().as_deref(),
+            Some("{\"ids\":{\"a\":1}}")
+        );
     }
 
     #[cfg(unix)]
