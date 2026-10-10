@@ -112,18 +112,18 @@ describe('a big cold start is not judged until it is complete (1)', () => {
       },
     };
   }
-  const mk = (partial: number, later: ScanReply[] = []) => {
+  const mk = (partial: number, later: ScanReply[] = [], scanClock: () => number = () => 0) => {
     const b = memoryBackend({ now: NOW });
     b.scan = partialThen(demoScanFiles(NOW / 1000), partial, later);
     const sent: string[] = [];
     b.notify = async (t, body) => { sent.push(`${t}|${body}`); return true; };
     b.notifyOff = false;
-    return { e: new Engine(b), sent };
+    return { e: new Engine(b, { scanClock }), sent };
   };
 
   it('no alert and no wrong states while the first pass is partial; the first complete pass is the baseline (no alerts for what is already done)', async () => {
     // AgentScanner reads up to 40 rounds per tick; 85 partial rounds mean the pass completes in the third tick
-    const { e, sent } = mk(85);
+    const { e, sent } = mk(85, [], () => 0); // frozen clock: the 1.5 s budget never cuts a tick short on a slow runner
     await e.init(); // first tick: 40 rounds, still partial
     expect(e.snap.scanning).toBe(true);
     expect(e.snap.agents).toEqual([]);
@@ -135,6 +135,18 @@ describe('a big cold start is not judged until it is complete (1)', () => {
     expect(sent).toEqual([]); // the demo has finished agents; none is announced after a cold start
     await e.tick(); await e.watcher.flush();
     expect(sent).toEqual([]);
+  });
+
+  it('the per-tick time budget is the only thing that bounds a tick: a slow machine (clock jumps) leaves the pass partial, deterministically', async () => {
+    // Regression for a flaky CI failure: the budget used the real clock, so a slow Windows runner stopped after fewer than 40 rounds.
+    let t = 0;
+    const b = memoryBackend({ now: NOW });
+    b.scan = partialThen(demoScanFiles(NOW / 1000), 5);
+    const e = new Engine(b, { scanClock: () => (t += 2000) });
+    await e.init(); // one round per tick: every read "takes" 2 s
+    expect(e.snap.scanning).toBe(true);
+    for (let i = 0; i < 5; i++) await e.tick();
+    expect(e.snap.scanning).toBe(false);
   });
 
   it('a real finish after the baseline is announced once', async () => {

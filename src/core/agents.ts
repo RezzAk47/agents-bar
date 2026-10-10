@@ -161,13 +161,14 @@ export class AgentScanner {
   /** Files the backend knows about (for the "Scanning..." note). */
   get knownCount(): number { return this.known.length; }
   private backend: ScanBackend;
-  constructor(backend: ScanBackend) { this.backend = backend; }
+  /** `clock` is injectable (milliseconds, monotonic): tests must not depend on how fast the machine is. */
+  constructor(backend: ScanBackend, private clock: () => number = () => performance.now()) { this.backend = backend; }
 
   /** Agents seen in the last 24 h, running first, newest first. */
   async scan(now: number, rediscover: boolean): Promise<Agent[]> {
     this.complete = false;
-    const started = performance.now();
-    for (let round = 0; round < MAX_SCAN_ROUNDS && (round === 0 || performance.now() - started < MAX_SCAN_MS); round++) {
+    const started = this.clock();
+    for (let round = 0; round < MAX_SCAN_ROUNDS && (round === 0 || this.clock() - started < MAX_SCAN_MS); round++) {
       const reply = await this.backend.scan(rediscover && round === 0 ? true : false);
       this.known = reply.known;
       for (const f of reply.files) this.apply(f);
