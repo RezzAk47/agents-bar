@@ -29,6 +29,19 @@ pub fn usable_icon(r: Option<Rect>) -> Option<Rect> {
     r.filter(|r| r.w > 0 && r.h > 0)
 }
 
+/// True when the session is Wayland, where a program cannot place its own window (the compositor decides). WAYLAND_DISPLAY or
+/// XDG_SESSION_TYPE=wayland says so, unless GDK_BACKEND forces the app onto X11 (XWayland), where positioning does work.
+pub fn is_wayland(env: &dyn Fn(&str) -> Option<String>) -> bool {
+    let set = |k: &str| env(k).map(|v| !v.trim().is_empty()).unwrap_or(false);
+    let forced_x11 =
+        env("GDK_BACKEND").is_some_and(|v| v.split(',').next().is_some_and(|b| b.trim() == "x11"));
+    if forced_x11 {
+        return false;
+    }
+    set("WAYLAND_DISPLAY")
+        || env("XDG_SESSION_TYPE").is_some_and(|v| v.trim().eq_ignore_ascii_case("wayland"))
+}
+
 pub const POPUP_W: i32 = 420;
 pub const POPUP_MAX_H: i32 = 640;
 pub const POPUP_MIN_H: i32 = 320;
@@ -86,6 +99,31 @@ pub fn popup_position(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wayland_is_detected_from_the_session_unless_gtk_is_forced_to_x11() {
+        let e = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                pairs
+                    .iter()
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, v)| v.to_string())
+            }
+        };
+        assert!(is_wayland(&e(&[("WAYLAND_DISPLAY", "wayland-0")])));
+        assert!(is_wayland(&e(&[("XDG_SESSION_TYPE", "Wayland")])));
+        assert!(!is_wayland(&e(&[("XDG_SESSION_TYPE", "x11")])));
+        assert!(!is_wayland(&e(&[("WAYLAND_DISPLAY", "  ")])));
+        assert!(!is_wayland(&e(&[])));
+        assert!(!is_wayland(&e(&[
+            ("WAYLAND_DISPLAY", "wayland-0"),
+            ("GDK_BACKEND", "x11")
+        ])));
+        assert!(is_wayland(&e(&[
+            ("WAYLAND_DISPLAY", "wayland-0"),
+            ("GDK_BACKEND", "wayland,x11")
+        ])));
+    }
     const WORK: Rect = Rect {
         x: 0,
         y: 25,
