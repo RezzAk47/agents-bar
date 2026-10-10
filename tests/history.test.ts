@@ -1,3 +1,4 @@
+import { MemoryIO } from '../src/backend/memory';
 import { describe, expect, it } from 'vitest';
 import { agentKey, type Agent } from '../src/core/agents';
 import { BURST, DeliveryQueue, FinishWatcher, MAX_ID_CHARS, MAX_IDS, MAX_RETRIES, NotifiedStore, agentId, capRows, groupNotification, notification, projectOf, today, todayRow, type Persist } from '../src/core/history';
@@ -167,6 +168,46 @@ describe('notified.json store', () => {
   it('an unwritable store never raises', async () => {
     const s = new NotifiedStore({ read: async () => { throw new Error('x'); }, write: async () => { throw new Error('y'); } }, () => NOW);
     await s.init();
+    expect(await s.save()).toBe(false);
+  });
+});
+
+describe('notified file compare-and-swap', () => {
+  const persistOn = (io: MemoryIO) => ({ read: () => io.read('notified.json'), stat: () => io.stat('notified.json'), write: (t: string, expected?: Awaited<ReturnType<MemoryIO['stat']>>) => io.write('notified.json', t, expected) });
+  it('keeps an id another instance wrote between our read and our save', async () => {
+    const io = new MemoryIO();
+    await io.write('notified.json', '{"version":1,"ids":{"old@1":' + (NOW - 10) + '}}\n');
+    const s = new NotifiedStore(persistOn(io), () => NOW);
+    await s.init();
+    await io.write('notified.json', '{"version":1,"ids":{"old@1":' + (NOW - 10) + ',"theirs@2":' + (NOW - 5) + '}}\n'); // the other copy
+    s.add('mine@3', NOW);
+    expect(await s.save()).toBe(true);
+    const t = new NotifiedStore(null, () => NOW); t.load(await io.read('notified.json'));
+    expect([...t.ids.keys()].sort()).toEqual(['mine@3', 'old@1', 'theirs@2']);
+  });
+  it('retries when the file changes between the check and the write', async () => {
+    const io = new MemoryIO();
+    const s = new NotifiedStore(persistOn(io), () => NOW);
+    await s.init();
+    let raced = false;
+    const real = io.write.bind(io);
+    io.write = async (n: string, text: string, e?: Parameters<MemoryIO['write']>[2]) => {
+      if (!raced) { raced = true; await real(n, '{"version":1,"ids":{"late@9":' + (NOW - 1) + '}}\n'); }
+      return real(n, text, e);
+    };
+    s.add('mine@3', NOW);
+    expect(await s.save()).toBe(true);
+    const t = new NotifiedStore(null, () => NOW); t.load(await io.read('notified.json'));
+    expect([...t.ids.keys()].sort()).toEqual(['late@9', 'mine@3']);
+  });
+  it('gives up (false) when the file keeps changing', async () => {
+    const io = new MemoryIO();
+    const s = new NotifiedStore(persistOn(io), () => NOW);
+    await s.init();
+    const real = io.write.bind(io);
+    let k = 0;
+    io.write = async (n: string, text: string, e?: Parameters<MemoryIO['write']>[2]) => { await real(n, `{"version":1,"ids":{"x${k++}@1":${NOW}}}\n`); return real(n, text, e); };
+    s.add('mine@3', NOW);
     expect(await s.save()).toBe(false);
   });
 });

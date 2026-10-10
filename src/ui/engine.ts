@@ -46,7 +46,8 @@ export class Engine {
     this.settings = new SettingsStore(backend.io);
     this.store = new NotifiedStore({
       read: () => backend.io.read(NOTIFIED_FILE),
-      write: (t) => backend.io.write(NOTIFIED_FILE, t),
+      stat: () => backend.io.stat(NOTIFIED_FILE),
+      write: (t, expected) => backend.io.write(NOTIFIED_FILE, t, expected),
     }, () => backend.now() / 1000);
     this.scanner = new AgentScanner(backend.scan, opts.scanClock);
     this.book = new StatusBook({ gh: backend.gh ?? { user: async () => '', repoList: async () => { throw new Error('GH_MISSING'); }, runList: async () => { throw new Error('GH_MISSING'); } } });

@@ -1,6 +1,7 @@
 // Finish alerts and the Today list (port of agents_history.py + notify_queue.py). No I/O of its own: persistence and the
 // notification itself are passed in.
 import { agentKey, elapsed, finishedSince, type Agent, type AgentState } from './agents';
+import { sameStamp, isConflict, type FileStamp } from './io';
 import { clean, clock, fmtDuration, fmtStats, isFiniteNumber, tokenPhrase } from './text';
 
 export const KEEP_SECONDS = 2 * 86400; // an alert is remembered this long
@@ -32,7 +33,14 @@ export function agentId(a: Pick<Agent, 'source' | 'path' | 'agentId' | 'lastActi
   return `${clean(`${a.source}:${a.path || a.agentId}`, MAX_ID_CHARS - 24)}@${pyRound(when)}`;
 }
 
-export interface Persist { read(): Promise<string | null>; write(text: string): Promise<void> }
+/** `stat` and `expected` are optional: with them, a save is a compare-and-swap (see NotifiedStore.save). */
+export interface Persist {
+  read(): Promise<string | null>;
+  write(text: string, expected?: FileStamp | null): Promise<void>;
+  stat?(): Promise<FileStamp | null>;
+}
+
+const SAVE_ATTEMPTS = 5;
 
 /** {agent id: epoch of the alert}. Loading is strict (bad entries dropped, a bad file means empty). */
 export class NotifiedStore {
@@ -64,8 +72,23 @@ export class NotifiedStore {
     this.prune();
   }
 
+  private lastStamp: FileStamp | null | undefined = undefined; // undefined = never looked
+
   async init(): Promise<void> {
-    try { this.load(this.persist ? await this.persist.read() : null); } catch { this.load(null); }
+    try {
+      const stamp = this.persist?.stat ? await this.persist.stat() : undefined; // stat first: a change after it is caught by the compare
+      this.load(this.persist ? await this.persist.read() : null);
+      this.lastStamp = stamp;
+    } catch { this.load(null); }
+  }
+
+  /** Adds what another copy of the app wrote (newer time wins, more failures win); nothing of ours is dropped. */
+  private mergeFrom(text: string | null): void {
+    const other = new NotifiedStore(null, this.clockNow);
+    other.load(text);
+    for (const [k, t] of other.ids) if (t > (this.ids.get(k) ?? -Infinity)) this.ids.set(k, t);
+    for (const [k, v] of other.tries) { const mine = this.tries.get(k); if (!mine || v[0] > mine[0]) this.tries.set(k, v); }
+    this.prune();
   }
 
   prune(): void {
@@ -99,8 +122,26 @@ export class NotifiedStore {
   }
 
   async save(): Promise<boolean> {
-    if (!this.persist) return true;
-    try { await this.persist.write(this.serialize()); return true; } catch { return false; }
+    const p = this.persist;
+    if (!p) return true;
+    // Without stat there is nothing to compare: plain write. With it, the write only lands on the file we last saw; if
+    // another copy changed it, its entries are merged in and the write is tried again (a few times).
+    if (!p.stat) { try { await p.write(this.serialize()); return true; } catch { return false; } }
+    for (let attempt = 0; attempt < SAVE_ATTEMPTS; attempt++) {
+      try {
+        const stamp = await p.stat();
+        if (this.lastStamp === undefined || !sameStamp(stamp, this.lastStamp)) {
+          this.mergeFrom(stamp === null ? null : await p.read());
+        }
+        await p.write(this.serialize(), stamp);
+        this.lastStamp = await p.stat();
+        return true;
+      } catch (e) {
+        if (!isConflict(e)) return false;
+        this.lastStamp = undefined; // changed under us: merge again
+      }
+    }
+    return false;
   }
 }
 
