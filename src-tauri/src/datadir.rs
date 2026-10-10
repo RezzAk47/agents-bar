@@ -28,12 +28,15 @@ impl Os {
     }
 }
 
-fn trim_end(p: &str, sep: char) -> &str {
-    if p.len() > 1 && p.ends_with(sep) {
-        &p[..p.len() - 1]
+/// `base` + separator + `rest`, without doubling the separator when `base` already ends with one ("/", "C:\\", "C:/").
+fn join(base: &str, rest: &str, os: Os) -> String {
+    let seps: &[char] = if os == Os::Windows {
+        &['\\', '/']
     } else {
-        p
-    }
+        &['/']
+    };
+    let sep = if os == Os::Windows { '\\' } else { '/' };
+    format!("{}{sep}{rest}", base.trim_end_matches(seps))
 }
 
 fn is_absolute(p: &str, os: Os) -> bool {
@@ -59,22 +62,20 @@ pub fn default_data_dir(os: Os, env: &dyn Fn(&str) -> Option<String>, home: &str
             return PathBuf::from(o);
         }
     }
-    let sep = if os == Os::Windows { '\\' } else { '/' };
-    let h = trim_end(home, sep);
     let s = match os {
-        Os::Mac => format!("{h}/Library/Application Support/AgentsBarCross"),
+        Os::Mac => join(home, "Library/Application Support/AgentsBarCross", os),
         Os::Windows => {
             let appdata = env("APPDATA")
                 .filter(|a| !a.trim().is_empty())
-                .unwrap_or_else(|| format!("{h}\\AppData\\Roaming"));
-            format!("{}\\AgentsBarCross", trim_end(&appdata, '\\'))
+                .unwrap_or_else(|| join(home, "AppData\\Roaming", os));
+            join(&appdata, "AgentsBarCross", os)
         }
         Os::Linux => {
             let base = match env("XDG_DATA_HOME") {
-                Some(x) if is_absolute(&x, Os::Linux) => trim_end(&x, '/').to_string(),
-                _ => format!("{h}/.local/share"),
+                Some(x) if is_absolute(&x, Os::Linux) => x,
+                _ => join(home, ".local/share", os),
             };
-            format!("{base}/AgentsBarCross")
+            join(&base, "AgentsBarCross", os)
         }
     };
     PathBuf::from(s)
@@ -116,6 +117,34 @@ mod tests {
         assert_eq!(
             default_data_dir(Os::Windows, &env(&[]), "C:\\Users\\Ann"),
             PathBuf::from("C:\\Users\\Ann\\AppData\\Roaming\\AgentsBarCross")
+        );
+    }
+
+    #[test]
+    fn a_bare_drive_or_root_home_does_not_double_the_separator() {
+        assert_eq!(
+            default_data_dir(Os::Windows, &env(&[]), "C:\\"),
+            PathBuf::from("C:\\AppData\\Roaming\\AgentsBarCross")
+        );
+        assert_eq!(
+            default_data_dir(Os::Windows, &env(&[]), "C:/"),
+            PathBuf::from("C:\\AppData\\Roaming\\AgentsBarCross")
+        );
+        assert_eq!(
+            default_data_dir(Os::Windows, &env(&[("APPDATA", "D:\\")]), "C:\\"),
+            PathBuf::from("D:\\AgentsBarCross")
+        );
+        assert_eq!(
+            default_data_dir(Os::Linux, &env(&[]), "/"),
+            PathBuf::from("/.local/share/AgentsBarCross")
+        );
+        assert_eq!(
+            default_data_dir(Os::Mac, &env(&[]), "/"),
+            PathBuf::from("/Library/Application Support/AgentsBarCross")
+        );
+        assert_eq!(
+            default_data_dir(Os::Linux, &env(&[("XDG_DATA_HOME", "/")]), "/h"),
+            PathBuf::from("/AgentsBarCross")
         );
     }
 
