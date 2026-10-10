@@ -26,7 +26,7 @@ use tauri::{
 use datadir::Os;
 use position::{
     fallback_corner, is_wayland, popup_height_logical, popup_position, popup_width_logical,
-    usable_icon, Rect,
+    settled_size, usable_icon, Rect,
 };
 
 const MARGIN: i32 = 8;
@@ -323,10 +323,16 @@ fn size_and_place(app: &AppHandle, win: &WebviewWindow, icon: Option<Rect>) {
         popup_height_logical(work.h, scale, MARGIN),
     );
     let _ = win.set_size(LogicalSize::new(w as f64, h as f64));
-    let size = win
-        .outer_size()
-        .map(|s| (s.width as i32, s.height as i32))
-        .unwrap_or(((w as f64 * scale) as i32, (h as f64 * scale) as i32));
+    let requested = (
+        (w as f64 * scale).round() as i32,
+        (h as f64 * scale).round() as i32,
+    );
+    let size = settled_size(
+        win.outer_size()
+            .ok()
+            .map(|s| (s.width as i32, s.height as i32)),
+        requested,
+    );
     if Os::current() == Os::Linux && is_wayland(&env_var) {
         // Wayland has no way for a program to place a toplevel window: tao documents set_outer_position as unsupported
         // there, and Tauri's `center()` on Linux is only a computed set_outer_position, so it would be ignored too. The
