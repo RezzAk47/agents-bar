@@ -230,6 +230,14 @@ fn kill_tree(child: &mut std::process::Child) {
 /// after the status was collected could, with very bad luck, hit a new process that got the same id.)
 /// Elsewhere (Windows) the tree goes with its parent, and this is plain `try_wait`.
 fn poll_exit(child: &mut std::process::Child) -> std::io::Result<Option<std::process::ExitStatus>> {
+    poll_exit_noted(child).map(|(st, _)| st)
+}
+
+/// `poll_exit`, plus whether the group was killed while the exited gh was still uncollected (the safe order). Always false
+/// where nothing is killed here (Windows) and when the exit was not seen before it was collected.
+fn poll_exit_noted(
+    child: &mut std::process::Child,
+) -> std::io::Result<(Option<std::process::ExitStatus>, bool)> {
     #[cfg(unix)]
     {
         // SAFETY: an all-zero siginfo_t is a valid value; waitid only writes into it.
@@ -246,16 +254,17 @@ fn poll_exit(child: &mut std::process::Child) -> std::io::Result<Option<std::pro
             // exited, not yet collected: the id is still ours
             unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL) };
         }
+        let before_collect = r == 0 && info.si_signo != 0;
         let st = child.try_wait()?;
-        if st.is_some() && !(r == 0 && info.si_signo != 0) {
+        if st.is_some() && !before_collect {
             // the probe failed or lost a race with the exit: the best that is left is the old behaviour
             unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL) };
         }
-        Ok(st)
+        Ok((st, before_collect))
     }
     #[cfg(not(unix))]
     {
-        child.try_wait()
+        child.try_wait().map(|st| (st, false))
     }
 }
 
@@ -515,6 +524,66 @@ mod tests {
             ),
         );
         assert_eq!(user(&gh, Duration::from_secs(5)).unwrap().trim(), "done");
+        let pid: i32 = std::fs::read_to_string(&pidfile)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let mut alive = true;
+        for _ in 0..40 {
+            alive = unsafe { libc::kill(pid, 0) } == 0;
+            if !alive {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(!alive, "the leftover sleep {pid} must be dead");
+    }
+
+    /// The order that closes the PID-reuse window, observed directly: the first poll that sees gh gone kills the group while
+    /// gh is still an uncollected zombie. (A kill after collecting would report `false` here.)
+    #[cfg(unix)]
+    #[test]
+    fn the_group_is_killed_before_the_exited_gh_is_collected() {
+        use std::os::unix::process::CommandExt;
+        let d = tempfile::tempdir().unwrap();
+        let pidfile = d.path().join("pid");
+        let mut child = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "sleep 30 >/dev/null 2>&1 &\necho $! > '{}'",
+                pidfile.display()
+            ))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .process_group(0)
+            .spawn()
+            .unwrap();
+        // wait (without collecting) until sh is a zombie, so that the poll below cannot lose the race with its exit
+        let t0 = Instant::now();
+        loop {
+            let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+            let r = unsafe {
+                libc::waitid(
+                    libc::P_PID,
+                    child.id() as libc::id_t,
+                    &mut info,
+                    libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+                )
+            };
+            if r == 0 && info.si_signo != 0 {
+                break;
+            }
+            assert!(t0.elapsed() < Duration::from_secs(5), "sh never exited");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let (st, before_collect) = poll_exit_noted(&mut child).unwrap();
+        assert!(st.unwrap().success());
+        assert!(
+            before_collect,
+            "the group must be killed before the status is collected"
+        );
         let pid: i32 = std::fs::read_to_string(&pidfile)
             .unwrap()
             .trim()
