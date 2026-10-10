@@ -20,7 +20,16 @@ const shots = [
   { name: 'both', url: '?fixture=demo' + s({ agent_metric: 'both' }), viewport: tall },
   { name: 'today', url: '?fixture=demo', viewport: { width: 420, height: 760 }, act: async (p) => { await p.locator('#h-today').scrollIntoViewIfNeeded(); await p.evaluate(() => document.querySelector('#h-today').scrollIntoView({ block: 'start' })); } },
   { name: 'github', url: '?fixture=demo' + s({ pr_alert: 3 }), viewport: { width: 420, height: 760 }, act: async (p) => { await p.waitForSelector('.repo'); await p.evaluate(() => document.querySelector('#h-github').scrollIntoView({ block: 'start' })); } },
-  { name: 'settings', url: '?fixture=demo', viewport: { width: 420, height: 1100 }, act: async (p) => { await p.getByRole('button', { name: 'Settings' }).click(); } },
+  { name: 'settings', url: '?fixture=demo', viewport: { width: 420, height: 1100 }, act: async (p) => {
+    await p.getByRole('button', { name: 'Settings' }).click();
+    // The browser preview has no data folder and no notification switch; show the wording a real install would not pin to a path.
+    await p.evaluate(() => {
+      for (const n of document.querySelectorAll('.note')) {
+        if (n.textContent.includes('(in memory)')) n.textContent = 'Settings are saved on this computer. Transcripts are only read, never changed.';
+        else if (n.textContent.includes('switched off for this run')) n.remove();
+      }
+    });
+  } },
   { name: 'empty', url: '?fixture=empty&gh=missing', viewport: { width: 420, height: 640 } },
   { name: 'gh-login', url: '?fixture=demo&gh=login', viewport: { width: 420, height: 760 }, act: async (p) => { await p.evaluate(() => document.querySelector('#h-github').scrollIntoView({ block: 'start' })); } },
   { name: 'ocean-compact', url: '?fixture=demo' + s({ theme: 'ocean', layout: 'compact', progress: 'ring' }), viewport: { width: 420, height: 900 } },
