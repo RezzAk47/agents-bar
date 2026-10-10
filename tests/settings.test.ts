@@ -70,3 +70,25 @@ describe('SettingsStore', () => {
     expect(JSON.parse((await io.read('settings.json'))!).notify_finish).toBe(false);
   });
 });
+
+describe('settings write races', () => {
+  it('a file written by someone else between our read and our write is not overwritten: the save is redone on top of it', async () => {
+    const io = new MemoryIO();
+    const s = new SettingsStore(io);
+    await s.init();
+    await s.update({ theme: 'ocean' }); // the file exists now
+    const orig = io.read.bind(io);
+    let fired = false;
+    io.read = async (n: string) => {
+      const t = await orig(n);
+      if (!fired && n === 'settings.json') { fired = true; await io.write(n, '{"zzz": 1, "max_agents": 5, "theme": "ocean"}\n'); } // another instance, right now
+      return t;
+    };
+    await s.update({ layout: 'compact' });
+    const disk = JSON.parse(io.files.get('settings.json')!.text) as Record<string, unknown>;
+    expect(disk.zzz).toBe(1); // their key survived
+    expect(disk.max_agents).toBe(5); // their value survived
+    expect(disk.layout).toBe('compact'); // ours was applied
+    expect(s.saveError).toBeNull();
+  });
+});

@@ -1,6 +1,6 @@
 // settings.json: strict about what it will overwrite. A file that cannot be read is never overwritten, unknown keys
 // survive a save, a hand edit made while the app runs is merged (only the keys changed here are applied on top).
-import { FileIO, FileStamp, Queue, errMessage, sameStamp } from './io';
+import { FileIO, FileStamp, Queue, errMessage, isConflict, sameStamp } from './io';
 import { stableStringify, Extra } from './json';
 import { AppSettings, SETTINGS_FILE, defaultSettings, mergeSettings, parseSettings, settingsToObject, validated } from './settings';
 
@@ -74,6 +74,16 @@ export class SettingsStore {
   }
 
   private async save(): Promise<boolean> {
+    // The write is a compare-and-swap against the file that was just read: if another instance or an editor replaced it in
+    // between, the write is refused (CONFLICT) and the whole read-merge-write is done again on top of the new file.
+    for (let attempt = 0; ; attempt++) {
+      try { return await this.saveOnce(); } catch (e) {
+        if (!isConflict(e) || attempt >= 4) { this.saveError = errMessage(e); return false; }
+      }
+    }
+  }
+
+  private async saveOnce(): Promise<boolean> {
     if (this.loadError !== null) return false; // never overwrite a file we could not read
     try {
       let toSave = this.settings;
@@ -97,13 +107,14 @@ export class SettingsStore {
           }
         }
       }
-      await this.io.write(SETTINGS_FILE, stableStringify(settingsToObject(toSave, extra)) + '\n');
+      await this.io.write(SETTINGS_FILE, stableStringify(settingsToObject(toSave, extra)) + '\n', stamp);
       this.extra = extra;
       this.baseline = toSave;
       this.lastStamp = await this.io.stat(SETTINGS_FILE);
       this.saveError = null; this.ignoredNotes = [];
       return true;
     } catch (e) {
+      if (isConflict(e)) throw e; // save() reads the file again and retries
       this.saveError = (e as Error).message;
       return false;
     }
