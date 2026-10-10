@@ -350,12 +350,19 @@ pub fn retry_transient<T>(
     }
 }
 
-/// Holds `<real file>.lock` exclusively until dropped. Waits up to 5 s.
+/// Holds `<real file>.lock` exclusively until dropped. Waits up to 3 s (less than the 5 s the page waits for the whole call),
+/// then refuses with an "is busy" error: a write never goes ahead unlocked and never lands after the page was told "timed out".
 /// A folder we cannot create the lock in just means "no lock": the compare-and-swap still protects the write.
+const LOCK_WAIT: Duration = Duration::from_secs(3);
+
 struct Lock(Option<fs::File>);
 
 impl Lock {
-    fn take(target: &Path) -> Lock {
+    fn take(target: &Path, name: &str) -> Result<Lock, String> {
+        Lock::take_for(target, name, LOCK_WAIT)
+    }
+
+    fn take_for(target: &Path, name: &str, wait: Duration) -> Result<Lock, String> {
         let lock_path = PathBuf::from(format!("{}.lock", target.display()));
         let mut o = fs::OpenOptions::new();
         o.create(true).append(true);
@@ -365,19 +372,24 @@ impl Lock {
             o.custom_flags(libc::O_NONBLOCK); // a FIFO planted as the lock file must not block the open
         }
         let Ok(f) = o.open(&lock_path) else {
-            return Lock(None);
+            return Ok(Lock(None));
         };
         if !f.metadata().map(|m| m.is_file()).unwrap_or(false) {
-            return Lock(None);
+            return Ok(Lock(None));
         }
         let t0 = std::time::Instant::now();
         loop {
             match f.try_lock() {
-                Ok(()) => return Lock(Some(f)),
-                Err(fs::TryLockError::WouldBlock) if t0.elapsed() < Duration::from_secs(5) => {
+                Ok(()) => return Ok(Lock(Some(f))),
+                Err(fs::TryLockError::WouldBlock) if t0.elapsed() < wait => {
                     std::thread::sleep(Duration::from_millis(5))
                 }
-                Err(_) => return Lock(None),
+                Err(fs::TryLockError::WouldBlock) => {
+                    return Err(format!(
+                        "{name} is busy (another copy is saving it); nothing was saved, try again"
+                    ))
+                }
+                Err(_) => return Ok(Lock(None)),
             }
         }
     }
@@ -403,7 +415,7 @@ pub fn write(
     let mut target = plan_target(&p, name)?; // refuses before any file (even the lock file) is created
     #[cfg(test)]
     tests::run_before_lock_hook();
-    let mut _lock = Lock::take(&target.path);
+    let mut _lock = Lock::take(&target.path, name)?;
     // The plan was made before the lock: another writer (the other app instance, tick.py, an editor's save) may have replaced
     // the file since, and `still_same` would then refuse a write that is perfectly fine. Plan again while holding the lock.
     for _ in 0..3 {
@@ -413,7 +425,7 @@ pub fn write(
         if same_place {
             break;
         }
-        _lock = Lock::take(&target.path);
+        _lock = Lock::take(&target.path, name)?;
     }
     if let Some(expected) = check {
         let current = fs::metadata(&p).ok().map(|m| stamp_of(&m));
@@ -1245,6 +1257,27 @@ mod tests {
             let w = within_10s(move || write(&dir, name, "{}", None)).unwrap_err();
             assert!(w.contains("not a regular file"), "{name}: {w}");
         }
+    }
+
+    #[test]
+    fn a_held_lock_refuses_with_busy_instead_of_writing_unlocked() {
+        let d = tempfile::tempdir().unwrap();
+        write(d.path(), "notified.json", "{\"ids\":{}}", None).unwrap();
+        let target = d.path().join("notified.json");
+        let held = Lock::take_for(&target, "notified.json", Duration::from_millis(50)).unwrap();
+        let t0 = std::time::Instant::now();
+        let e = match Lock::take_for(&target, "notified.json", Duration::from_millis(100)) {
+            Err(e) => e,
+            Ok(_) => panic!("the second lock must not be granted"),
+        };
+        assert!(e.contains("is busy"), "{e}");
+        assert!(t0.elapsed() < Duration::from_secs(2));
+        drop(held);
+        assert!(Lock::take_for(&target, "notified.json", Duration::from_millis(100)).is_ok());
+        assert!(
+            LOCK_WAIT < Duration::from_secs(5),
+            "must be under the call limit in lib.rs"
+        );
     }
 
     #[cfg(unix)]
