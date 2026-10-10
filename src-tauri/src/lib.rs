@@ -66,7 +66,7 @@ fn app_info(state: State<AppState>) -> AppInfo {
         data_dir: state.data_dir.display().to_string(),
         no_notifications: env_var("AGENTSBAR_NO_NOTIFICATIONS").is_some(),
         tray_note: if os == Os::Linux && is_wayland(&env_var) {
-            Some("Linux (Wayland): tray icons cannot report clicks, so open Agents Bar from the tray icon's menu (Show Agents Bar). Wayland does not let an app choose where its window goes, so your desktop decides where it opens. On GNOME the AppIndicator extension is required.")
+            Some("Linux (Wayland): tray icons cannot report clicks, so open Agents Bar from the tray icon's menu (Show Agents Bar). Wayland does not let an app choose where its window goes, so it opens wherever your desktop puts it. On GNOME the AppIndicator extension is required.")
         } else if os == Os::Linux {
             Some("Linux: tray icons cannot report clicks, so open Agents Bar from the tray icon's menu (Show Agents Bar). The window opens at the top right of the screen. On GNOME the AppIndicator extension is required.")
         } else {
@@ -328,8 +328,9 @@ fn size_and_place(app: &AppHandle, win: &WebviewWindow, icon: Option<Rect>) {
         .map(|s| (s.width as i32, s.height as i32))
         .unwrap_or(((w as f64 * scale) as i32, (h as f64 * scale) as i32));
     if Os::current() == Os::Linux && is_wayland(&env_var) {
-        // Wayland ignores a program's own window positions: ask for the centre and let the compositor have the last word
-        let _ = win.center();
+        // Wayland has no way for a program to place a toplevel window: tao documents set_outer_position as unsupported
+        // there, and Tauri's `center()` on Linux is only a computed set_outer_position, so it would be ignored too. The
+        // window opens wherever the compositor puts it (its size above is still ours).
         return;
     }
     let margin = (MARGIN as f64 * scale).round() as i32;
