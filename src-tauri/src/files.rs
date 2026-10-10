@@ -365,7 +365,9 @@ impl Lock {
     fn take_for(target: &Path, name: &str, wait: Duration) -> Result<Lock, String> {
         let lock_path = PathBuf::from(format!("{}.lock", target.display()));
         let mut o = fs::OpenOptions::new();
-        o.create(true).append(true);
+        // Read + write access, NOT append-only: on Windows LockFileEx is refused (access denied) for an append-only handle, and the
+        // `Err(_)` arm below would then silently mean "no lock" and every write would go unlocked.
+        o.create(true).read(true).write(true);
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
