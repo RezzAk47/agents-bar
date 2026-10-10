@@ -169,7 +169,7 @@ pub fn run(gh: &PathBuf, args: &[&str], timeout: Duration) -> Result<String, Str
     let err = child.stderr.take().map(reader);
     let start = Instant::now();
     let status = loop {
-        match child.try_wait() {
+        match poll_exit(&mut child) {
             Ok(Some(st)) => break st,
             Ok(None) => {
                 if start.elapsed() >= timeout {
@@ -184,7 +184,6 @@ pub fn run(gh: &PathBuf, args: &[&str], timeout: Duration) -> Result<String, Str
             Err(e) => return Err(format!("GH_FAILED:{e}")),
         }
     };
-    kill_group_leftovers(&child); // a helper gh left behind must not keep the pipes (or the machine) busy
     let stdout = collect(out);
     let stderr = collect(err);
     if !status.success() {
@@ -225,15 +224,38 @@ fn kill_tree(child: &mut std::process::Child) {
     let _ = child.kill();
 }
 
-/// After gh itself has exited: whatever is still in its group is killed (Unix; on Windows the tree is gone with its parent job end).
-fn kill_group_leftovers(child: &std::process::Child) {
+/// Has gh exited? On Unix the exit is first noticed WITHOUT collecting it (`waitid` with WNOWAIT): the exited gh stays a
+/// zombie that still owns its process id, so the group cannot have been handed to an unrelated process yet, and whatever
+/// a helper left behind in that group is killed before the id is released by collecting the status. (Killing the group
+/// after the status was collected could, with very bad luck, hit a new process that got the same id.)
+/// Elsewhere (Windows) the tree goes with its parent, and this is plain `try_wait`.
+fn poll_exit(child: &mut std::process::Child) -> std::io::Result<Option<std::process::ExitStatus>> {
     #[cfg(unix)]
     {
-        unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL) };
+        // SAFETY: an all-zero siginfo_t is a valid value; waitid only writes into it.
+        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+        let r = unsafe {
+            libc::waitid(
+                libc::P_PID,
+                child.id() as libc::id_t,
+                &mut info,
+                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+            )
+        };
+        if r == 0 && info.si_signo != 0 {
+            // exited, not yet collected: the id is still ours
+            unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL) };
+        }
+        let st = child.try_wait()?;
+        if st.is_some() && !(r == 0 && info.si_signo != 0) {
+            // the probe failed or lost a race with the exit: the best that is left is the old behaviour
+            unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL) };
+        }
+        Ok(st)
     }
     #[cfg(not(unix))]
     {
-        let _ = child;
+        child.try_wait()
     }
 }
 
@@ -479,6 +501,34 @@ mod tests {
         let out = user(&gh, Duration::from_secs(5)).unwrap();
         assert_eq!(out.trim(), "done");
         assert!(t0.elapsed() < Duration::from_secs(4), "{:?}", t0.elapsed());
+    }
+
+    #[test]
+    fn a_helper_left_behind_after_gh_exits_is_killed() {
+        let d = tempfile::tempdir().unwrap();
+        let pidfile = d.path().join("pid");
+        let gh = fake(
+            d.path(),
+            &format!(
+                "sleep 30 >/dev/null 2>&1 &\necho $! > '{}'\necho done",
+                pidfile.display()
+            ),
+        );
+        assert_eq!(user(&gh, Duration::from_secs(5)).unwrap().trim(), "done");
+        let pid: i32 = std::fs::read_to_string(&pidfile)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let mut alive = true;
+        for _ in 0..40 {
+            alive = unsafe { libc::kill(pid, 0) } == 0;
+            if !alive {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(!alive, "the leftover sleep {pid} must be dead");
     }
 
     #[test]
