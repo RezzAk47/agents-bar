@@ -1,6 +1,6 @@
 [package]
 name = "agents-bar-cross"
-version = "0.1.0"
+version = "0.1.1"
 description = "Agents Bar for Windows, Linux and macOS: a tray app showing running and finished Claude Code and Codex agents and GitHub CI status."
 edition = "2021"
 rust-version = "1.90"
