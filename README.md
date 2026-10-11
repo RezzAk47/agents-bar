@@ -2,7 +2,7 @@
 
 A tray / menu-bar app for **Windows, Linux and macOS** that shows your running and finished **Claude Code** and **Codex** agents, plus your GitHub repositories with CI status. It is a separate app with its own tray icon (a Tauri v2 shell with a Preact popup). It is the cross-platform sibling of the Mac-only [agents-bar](https://github.com/RezzAk47/agents-bar) and follows its behaviour. Both are based on CLI-Usage by Nima Ansari (see Credit).
 
-**Status: early.** Tested on macOS only. Windows and Linux builds are untested, and the release workflow has not been run yet. Downloads will be unsigned, so Windows SmartScreen and macOS Gatekeeper will warn. Not affiliated with Anthropic or OpenAI; Claude and Codex are their owners' trademarks.
+**Status: early.** Developed on macOS. CI (build, tests, screenshots) passes on Windows, Linux and macOS. The release installers were installed and started in an automated smoke test on all three systems (Linux on x86_64 only); that test does not click the tray icon, and nobody has used the Windows or Linux builds by hand yet. Downloads will be unsigned, so Windows SmartScreen and macOS Gatekeeper will warn. Not affiliated with Anthropic or OpenAI; Claude and Codex are their owners' trademarks.
 
 ![running and recent, light](docs/running-recent-light.png)
 ![github and needs attention, dark](docs/github-dark.png)
@@ -98,7 +98,7 @@ See `THIRD-PARTY-NOTICES.md` for the licences of the components this app uses (t
 
 ## Releasing
 
-Releases are built by `.github/workflows/release.yml` when a version tag is pushed. The builds are unsigned (see the release notes text in that file). The workflow has not been run on GitHub yet, so expect to fix small things on the first release.
+Releases are built by `.github/workflows/release.yml` when a version tag is pushed. The builds are unsigned (see the release notes text in that file). The release workflow builds the installers for all three systems on GitHub; expect small fixes on the first public release.
 
 1. Choose the new version, for example `0.2.0`, and change it in all three places so they match: `version` in `src-tauri/tauri.conf.json`, `version` in `src-tauri/Cargo.toml`, and `version` in `package.json`. Then run `cargo check` in `src-tauri` (and `npm install --package-lock-only`) so `Cargo.lock` and `package-lock.json` follow.
 2. Commit the change, then tag it: `git tag v0.2.0`. The tag must be `v` plus the exact version; the workflow stops with an error if it differs from `tauri.conf.json` or if the three versions disagree.
