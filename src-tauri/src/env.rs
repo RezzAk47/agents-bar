@@ -30,8 +30,9 @@ pub fn var(name: &str) -> Option<String> {
 }
 
 /// The home folder: USERPROFILE on Windows (Node's homedir() does the same; HOME can be set by Git Bash or MSYS to a path
-/// the rest of the tools do not use), HOME elsewhere, with the other as the fallback.
-pub fn home_dir(os: Os, env: &dyn Fn(&str) -> Option<String>) -> String {
+/// the rest of the tools do not use), HOME elsewhere, with the other as the fallback. No home folder is an error: guessing
+/// "." would put the data folder under whatever the current directory happens to be.
+pub fn home_dir(os: Os, env: &dyn Fn(&str) -> Option<String>) -> Result<String, String> {
     let non_empty = |n: &str| env(n).filter(|v| !v.trim().is_empty());
     let (first, second) = if os == Os::Windows {
         ("USERPROFILE", "HOME")
@@ -40,7 +41,11 @@ pub fn home_dir(os: Os, env: &dyn Fn(&str) -> Option<String>) -> String {
     };
     non_empty(first)
         .or_else(|| non_empty(second))
-        .unwrap_or_else(|| ".".into())
+        .ok_or_else(|| {
+            format!(
+                "Agents Bar could not find your home folder ({first} and {second} are not set), so it cannot tell where to keep its data. Set {first} and start it again."
+            )
+        })
 }
 
 #[cfg(test)]
@@ -84,18 +89,28 @@ mod tests {
             ("USERPROFILE", "C:\\Users\\Ann"),
         ]);
         assert_eq!(
-            home_dir(Os::Windows, &both),
+            home_dir(Os::Windows, &both).unwrap(),
             "C:\\Users\\Ann",
             "Windows prefers USERPROFILE"
         );
-        assert_eq!(home_dir(Os::Linux, &both), "/c/Users/git-home");
-        assert_eq!(home_dir(Os::Mac, &both), "/c/Users/git-home");
-        assert_eq!(home_dir(Os::Windows, &env(&[("HOME", "/h")])), "/h");
+        assert_eq!(home_dir(Os::Linux, &both).unwrap(), "/c/Users/git-home");
+        assert_eq!(home_dir(Os::Mac, &both).unwrap(), "/c/Users/git-home");
         assert_eq!(
-            home_dir(Os::Linux, &env(&[("USERPROFILE", "C:\\U")])),
+            home_dir(Os::Windows, &env(&[("HOME", "/h")])).unwrap(),
+            "/h"
+        );
+        assert_eq!(
+            home_dir(Os::Linux, &env(&[("USERPROFILE", "C:\\U")])).unwrap(),
             "C:\\U"
         );
-        assert_eq!(home_dir(Os::Linux, &env(&[("HOME", "  ")])), ".");
-        assert_eq!(home_dir(Os::Linux, &env(&[])), ".");
+        for os in [Os::Linux, Os::Mac, Os::Windows] {
+            let blank = home_dir(os, &env(&[("HOME", "  ")]));
+            assert!(blank.is_err(), "blank HOME is no home folder");
+            assert!(blank.unwrap_err().contains("home folder"));
+            assert!(
+                home_dir(os, &env(&[])).is_err(),
+                "no home folder is an error, not \".\""
+            );
+        }
     }
 }

@@ -54,7 +54,7 @@ fn env_var(name: &str) -> Option<String> {
     env::var(name)
 }
 
-fn home_dir() -> String {
+fn home_dir() -> Result<String, String> {
     env::home_dir(Os::current(), &env_var)
 }
 
@@ -360,6 +360,14 @@ fn place_and_show(app: &AppHandle, win: &WebviewWindow, icon: Option<Rect>) {
     let _ = app.emit("popup-shown", ());
 }
 
+/// How long after the popup hid itself on blur a tray click is treated as the click that caused the blur. The blur fires on
+/// mouse DOWN and the tray handler on mouse UP, so a click held longer than this window would hide on down and reopen on up.
+const BLUR_REOPEN_SUPPRESS: Duration = Duration::from_millis(400);
+
+fn suppress_reopen(since_blur: Duration) -> bool {
+    since_blur < BLUR_REOPEN_SUPPRESS
+}
+
 fn toggle_popup(app: &AppHandle, icon: Option<Rect>) {
     let Some(win) = app.get_webview_window("main") else {
         return;
@@ -370,7 +378,7 @@ fn toggle_popup(app: &AppHandle, icon: Option<Rect>) {
         return;
     }
     if let Some(t) = *state.blurred_at.lock().unwrap() {
-        if t.elapsed() < Duration::from_millis(250) {
+        if suppress_reopen(t.elapsed()) {
             return; // this click is the one that made the popup lose focus and hide
         }
     }
@@ -434,8 +442,16 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 
 pub fn run() {
     let os = Os::current();
-    let data_dir = datadir::default_data_dir(os, &env_var, &home_dir());
-    let (claude_root, codex_root) = scanner::roots(&env_var, &home_dir());
+    let home = match home_dir() {
+        Ok(h) => h,
+        Err(msg) => {
+            // refuse to start rather than guess a folder; no panic, a clear message, exit code 1
+            eprintln!("{msg}");
+            std::process::exit(1);
+        }
+    };
+    let data_dir = datadir::default_data_dir(os, &env_var, &home);
+    let (claude_root, codex_root) = scanner::roots(&env_var, &home);
 
     let mut builder = tauri::Builder::default();
     #[cfg(desktop)]
@@ -525,7 +541,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{notification_text, off_main_for, TRAY_MID};
+    use super::{notification_text, off_main_for, suppress_reopen, BLUR_REOPEN_SUPPRESS, TRAY_MID};
     use std::time::Duration;
 
     #[test]
@@ -539,6 +555,19 @@ mod tests {
             120
         );
         assert_eq!(notification_text("  a   b  ", 10), "a b");
+    }
+
+    #[test]
+    fn a_tray_click_held_a_third_of_a_second_after_a_blur_does_not_reopen_the_popup() {
+        assert_eq!(BLUR_REOPEN_SUPPRESS, Duration::from_millis(400));
+        assert!(suppress_reopen(Duration::from_millis(0)));
+        assert!(suppress_reopen(Duration::from_millis(300)), "a slow click");
+        assert!(suppress_reopen(Duration::from_millis(399)));
+        assert!(!suppress_reopen(Duration::from_millis(400)));
+        assert!(
+            !suppress_reopen(Duration::from_secs(2)),
+            "a later, deliberate click opens it"
+        );
     }
 
     #[test]
