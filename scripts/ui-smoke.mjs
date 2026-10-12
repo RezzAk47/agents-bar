@@ -17,7 +17,13 @@ ok(await page.locator('[role=img][aria-label]').count() >= 5, 'rings have text l
 ok(await page.locator('.pill.status').count() >= 6, 'every agent has a state word');
 await page.keyboard.press('Tab');
 ok((await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '')).includes('Show transcript'), 'first Tab reaches the first agent card');
+ok((await page.locator('.all-repos').innerText()) === 'All repositories on github.com/demo-user', 'the GitHub list ends with the profile link');
 await page.getByRole('button', { name: 'Settings' }).click();
+{
+  const cut = await open(ctx, '?fixture=demo&settings=' + encodeURIComponent(JSON.stringify({ max_repos: 3 })));
+  ok((await cut.locator('.all-repos').innerText()) === '+1 more on github.com/demo-user', 'a cut GitHub list ends with "+N more" on the profile link');
+  await cut.close();
+}
 ok(await page.locator('h1').innerText() === 'Settings', 'Settings opens');
 await page.getByRole('button', { name: 'Both' }).click();
 ok(await page.getByRole('button', { name: 'Both' }).getAttribute('aria-pressed') === 'true', 'a setting can be picked');

@@ -1,8 +1,8 @@
 // The engine behind the popup: owns the scanner, the finish watcher, the GitHub book and the settings, and publishes one
 // snapshot to the UI after every change. No DOM here, so it is tested without a browser.
-import { AgentScanner, trayLabel, type Agent } from '../core/agents';
+import { AgentScanner, barState, barText, trayLabel, type Agent } from '../core/agents';
 import { FinishWatcher, NotifiedStore, groupNotification, notification, today } from '../core/history';
-import { StatusBook, attention, fetchWithStatus, ghErrorText, summary, type Hit, type Repo } from '../core/github';
+import { OWNER_RE, REPO_FETCH_LIMIT, StatusBook, attention, fetchWithStatus, ghErrorText, summary, type Hit, type Repo } from '../core/github';
 import { SettingsStore } from '../core/settingsStore';
 import { NOTIFIED_FILE } from '../core/settings';
 import { errMessage } from '../core/io';
@@ -109,9 +109,10 @@ export class Engine {
     this.snap = { ...this.snap, hits, attention: sum ? { text: sum[0], repo: sum[1] } : null };
   }
 
+  /** Tooltip: the counts in words; title (beside the icon, where the OS shows one): the Mac glance text, '' when idle. */
   async publishTray(): Promise<void> {
-    const running = this.snap.agents.filter((a) => a.state === 'running').length;
-    try { await this.backend.setTrayLabel(trayLabel(running, this.snap.finishedToday.length)); } catch { /* the tray is a bonus */ }
+    const [running, pct] = barState(this.snap.agents);
+    try { await this.backend.setTrayLabel(trayLabel(running, this.snap.finishedToday.length, pct), barText(this.snap.agents)); } catch { /* the tray is a bonus */ }
   }
 
   private ghRun: Promise<void> = Promise.resolve();
@@ -129,7 +130,7 @@ export class Engine {
     this.emit();
     try {
       if (!this.backend.gh) throw new Error('GH_MISSING');
-      const [login, repos] = await fetchWithStatus(this.book, this.backend.gh, this.backend.now() / 1000, 50);
+      const [login, repos] = await fetchWithStatus(this.book, this.backend.gh, this.backend.now() / 1000, REPO_FETCH_LIMIT);
       this.snap = { ...this.snap, repos, login, ghError: null, ghUpdated: this.backend.now() };
     } catch (e) {
       this.snap = { ...this.snap, ghError: ghErrorText(e) }; // the last good list stays on screen
@@ -150,5 +151,11 @@ export class Engine {
   async openRepo(r: Repo): Promise<void> {
     const m = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/?$/.exec(r.url);
     if (m) await this.backend.openRepo(m[1]!);
+  }
+
+  /** Opens https://github.com/<login> (the login from gh; Rust checks it again and builds the URL itself). */
+  async openProfile(): Promise<void> {
+    const login = this.snap.login;
+    if (OWNER_RE.test(login)) await this.backend.openProfile(login);
   }
 }

@@ -120,10 +120,19 @@ export function barState(agents: Agent[]): [number, number | null] {
   return [running.length, pcts.length ? Math.floor(pcts.reduce((x, y) => x + y, 0) / pcts.length) : null];
 }
 
-/** Tray tooltip/title: '3 running · 2 finished' (finished = done today is passed in by the caller). */
-export function trayLabel(running: number, finished: number): string {
+/** The glance text beside the tray icon (Mac bar_text): '63%' for one running agent, '2 · 33%' for two (the average of
+ * the known percents, rounded down), '2' when no running agent has an estimate yet, '' when nothing runs. */
+export function barText(agents: Agent[]): string {
+  const [n, pct] = barState(agents);
+  if (!n) return '';
+  if (pct === null) return String(n);
+  return n === 1 ? `${pct}%` : `${n} · ${pct}%`;
+}
+
+/** Tray tooltip: '3 running (average 50%) · 2 finished' (finished = done today is passed in by the caller). */
+export function trayLabel(running: number, finished: number, pct: number | null = null): string {
   const parts: string[] = [];
-  if (running) parts.push(`${running} running`);
+  if (running) parts.push(pct === null ? `${running} running` : `${running} running (${running === 1 ? '' : 'average '}${pct}%)`);
   if (finished) parts.push(`${finished} finished`);
   return parts.length ? parts.join(' · ') : 'Agents Bar';
 }

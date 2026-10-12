@@ -24,9 +24,12 @@ Supported tools: Claude Code subagents and Codex CLI sessions; GitHub through th
 
 - Running and Recent cards: Running, Done or Stalled, with a progress ring, steps and tokens, or both.
 - Progress from the agent's own `PROGRESS: 40% - note` lines, otherwise an estimate from similar finished agents, plus time left.
-- Tray text such as `3 running · 2 finished` (next to the icon on macOS, a tooltip on every OS).
+- Tray glance text such as `63%` for one running agent or `2 · 33%` for two (next to the icon on macOS), and a tooltip on every OS
+  such as `2 running (average 33%) · 1 finished`.
+- An agent past its usual time says by how much, such as `7m 40s over usual (~4m 00s)`.
 - A notification when an agent finishes, and a Today list.
-- GitHub section: issues, PRs and the latest CI result per repo, with a "Needs attention" banner for failing CI or too many open PRs.
+- GitHub section: issues, PRs and the latest CI result per repo, with a "Needs attention" banner for failing CI or too many open PRs,
+  and an `All repositories on github.com/<login>` (or `+N more`) link at the end.
 - Light and dark, 5 colour themes, four layouts (Cards, Glass, Solid, Compact), start at login.
 
 ## Download

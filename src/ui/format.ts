@@ -28,7 +28,9 @@ export function subtitle(a: Agent, metric: AgentMetric): string {
   const est = a.pct === null ? '' : a.reported ? `${a.pct}%` : `est. ${a.pct}%`;
   if (metric === 'percent') {
     const rem = remaining(a);
-    if (overrun(a)) return `Taking longer than usual · ${fmtStats({ ...a, tokensNew: null })}`;
+    // whole seconds over a known, positive usual time; under one second over is not worth saying ("0s over usual")
+    const over = a.typical !== null && a.typical > 0 ? elapsed(a) - a.typical : 0;
+    if (overrun(a) && over >= 1) return `${fmtDuration(over)} over usual (~${fmtDuration(a.typical)}) · ${fmtStats({ ...a, tokensNew: null })}`;
     const parts: string[] = [];
     if (rem !== null) parts.push(`~${fmtDuration(rem)} left`);
     if (a.note) parts.push(a.note);

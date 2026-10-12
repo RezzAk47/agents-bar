@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { claudeLines, codexLines } from '../tools/synth';
-import { AgentScanner, barState, curvePct, elapsed, estimate, finishedSince, nextDone, overrun, remaining, stateOf, trayLabel, agentKey, type Agent, type KnownFile, type ScanFile, type ScanReply } from '../src/core/agents';
+import { AgentScanner, barState, barText, curvePct, elapsed, estimate, finishedSince, nextDone, overrun, remaining, stateOf, trayLabel, agentKey, type Agent, type KnownFile, type ScanFile, type ScanReply } from '../src/core/agents';
 import type { Rec } from '../src/core/transcripts';
 
 const NOW = 1_760_000_000;
@@ -83,6 +83,20 @@ describe('percent estimate', () => {
     expect(trayLabel(0, 2)).toBe('2 finished');
     expect(trayLabel(1, 0)).toBe('1 running');
     expect(trayLabel(0, 0)).toBe('Agents Bar');
+    expect(trayLabel(3, 2, 50)).toBe('3 running (average 50%) · 2 finished');
+    expect(trayLabel(1, 0, 63)).toBe('1 running (63%)');
+  });
+  it('the tray glance text matches the Mac bar_text rules', () => {
+    expect(barText([])).toBe('');
+    expect(barText([agent({ state: 'done', pct: 100 })])).toBe('');
+    expect(barText([agent({ state: 'stalled', pct: 40 })])).toBe('');
+    expect(barText([agent({ pct: 63 })])).toBe('63%');
+    expect(barText([agent({ pct: 40 }), agent({ pct: 60, path: '/b' })])).toBe('2 · 50%');
+    expect(barText([agent({ pct: 33 }), agent({ pct: 34, path: '/b' })])).toBe('2 · 33%'); // the average is rounded down
+    expect(barText([agent({ pct: null }), agent({ pct: null, path: '/b' })])).toBe('2'); // no estimate yet: the count only
+    expect(barText([agent({ pct: null })])).toBe('1');
+    // the count is every running agent; the average only of those with a percent (an unknown is not counted as 0)
+    expect(barText([agent({ pct: 60 }), agent({ pct: null, path: '/b' }), agent({ state: 'done', pct: 100, path: '/c' })])).toBe('2 · 60%');
   });
 });
 
