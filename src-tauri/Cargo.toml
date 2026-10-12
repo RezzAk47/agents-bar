@@ -1,5 +1,5 @@
 [package]
-name = "agents-bar-cross"
+name = "agents-bar"
 version = "0.1.1"
 description = "Agents Bar for Windows, Linux and macOS: a tray app showing running and finished AI coding agents and GitHub CI status."
 edition = "2021"

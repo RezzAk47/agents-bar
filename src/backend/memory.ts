@@ -56,8 +56,8 @@ export function demoGh(nowSec: number, mode: 'ok' | 'missing' | 'login' | 'rate'
     url: `https://github.com/demo-user/${name}`, isPrivate: priv, isFork: false, isArchived: false, issues: { totalCount: issues }, pullRequests: { totalCount: prs },
   });
   const long = 'a-repository-with-an-extremely-long-name-that-never-breaks-at-all-1234567890';
-  const repos = [repo(hostile ? long : 'agents-bar-cross', 5, 2, 1, 'TypeScript', 12), repo(hostile ? `${long}-2` : 'pos-demo', 90, 0, 5, 'JavaScript', 3), repo('notes-site', 600, 7, 0, 'HTML', 1, true), repo('tiny-cli', 3000, 0, 0, 'Rust', 0)];
-  const ci: Record<string, string> = { 'agents-bar-cross': 'success', 'pos-demo': 'failure', [long]: 'success', [`${long}-2`]: 'failure', 'notes-site': 'in_progress', 'tiny-cli': '' };
+  const repos = [repo(hostile ? long : 'agents-bar', 5, 2, 1, 'TypeScript', 12), repo(hostile ? `${long}-2` : 'pos-demo', 90, 0, 5, 'JavaScript', 3), repo('notes-site', 600, 7, 0, 'HTML', 1, true), repo('tiny-cli', 3000, 0, 0, 'Rust', 0)];
+  const ci: Record<string, string> = { 'agents-bar': 'success', 'pos-demo': 'failure', [long]: 'success', [`${long}-2`]: 'failure', 'notes-site': 'in_progress', 'tiny-cli': '' };
   const fail = () => { throw new Error(mode === 'missing' ? 'GH_MISSING' : mode === 'login' ? 'GH_NOT_LOGGED_IN' : 'GH_RATE_LIMIT'); };
   return {
     async user() { if (mode !== 'ok') fail(); return 'demo-user\n'; },
