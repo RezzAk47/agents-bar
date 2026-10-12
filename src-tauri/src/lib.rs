@@ -135,18 +135,23 @@ async fn fs_move_aside(
     off_main(move || files::move_aside(&dir, &name, &backup_name))
 }
 
+/// Tray text from the page: no control characters, at most `max` characters.
+pub fn tray_text(text: &str, max: usize) -> String {
+    text.chars().filter(|c| !c.is_control()).take(max).collect()
+}
+
+/// `label` is the tooltip; `title` is the short glance text beside the icon ("63%", "2 · 33%"), "" when nothing runs.
 #[tauri::command]
-fn set_tray_label(state: State<AppState>, label: String) {
-    let label: String = label
-        .chars()
-        .filter(|c| !c.is_control())
-        .take(120)
-        .collect();
+fn set_tray_label(state: State<AppState>, label: String, title: String) {
+    let label = tray_text(&label, 120);
+    let title = tray_text(&title, 24);
     if let Some(tray) = state.tray.lock().unwrap().as_ref() {
-        eprintln!("agents-bar: tray label: {label}");
+        eprintln!("agents-bar: tray label: {label} [{title}]");
         let _ = tray.set_tooltip(Some(&label));
         #[cfg(target_os = "macos")]
-        let _ = tray.set_title(Some(&label));
+        let _ = tray.set_title(if title.is_empty() { None } else { Some(title) });
+        #[cfg(not(target_os = "macos"))]
+        let _ = title;
     }
 }
 
@@ -267,6 +272,16 @@ fn reveal_transcript(app: AppHandle, state: State<AppState>, path: String) -> Re
 #[tauri::command]
 fn open_repo(app: AppHandle, slug: String) -> Result<(), String> {
     let url = gh::repo_url(&slug).ok_or_else(|| "not a valid repository name".to_string())?;
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// Opens https://github.com/<login>, built here from a validated login (never a URL from the page).
+#[tauri::command]
+fn open_profile(app: AppHandle, login: String) -> Result<(), String> {
+    let url = gh::profile_url(&login).ok_or_else(|| "not a valid GitHub login".to_string())?;
     use tauri_plugin_opener::OpenerExt;
     app.opener()
         .open_url(url, None::<&str>)
@@ -489,6 +504,7 @@ pub fn run() {
             gh_run_list,
             reveal_transcript,
             open_repo,
+            open_profile,
             notify
         ])
         .setup(|app| {
@@ -541,7 +557,9 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{notification_text, off_main_for, suppress_reopen, BLUR_REOPEN_SUPPRESS, TRAY_MID};
+    use super::{
+        notification_text, off_main_for, suppress_reopen, tray_text, BLUR_REOPEN_SUPPRESS, TRAY_MID,
+    };
     use std::time::Duration;
 
     #[test]
@@ -555,6 +573,13 @@ mod tests {
             120
         );
         assert_eq!(notification_text("  a   b  ", 10), "a b");
+    }
+
+    #[test]
+    fn tray_text_drops_control_characters_and_is_capped() {
+        assert_eq!(tray_text("2 · 33%\n\u{7}", 24), "2 · 33%");
+        assert_eq!(tray_text(&"9".repeat(100), 24).chars().count(), 24);
+        assert_eq!(tray_text("", 24), "");
     }
 
     #[test]

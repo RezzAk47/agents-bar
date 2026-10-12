@@ -7,7 +7,7 @@ import { Alert, Back, Chevron, Gear, Lock, Pause, Play, Power, Refresh, Tick } f
 import { AGENT_METRICS, APPEARANCES, BLURS, GLASS_STEP, LABELS, LAYOUTS, LIMIT_MAX, LIMIT_MIN, PROGRESS_STYLES, PR_ALERT_MAX, PR_ALERT_MIN, THEMES, maxRunningFor, type AppSettings } from '../core/settings';
 import { nextDone, type Agent } from '../core/agents';
 import { capRows, todayRow } from '../core/history';
-import { segments, spoken, spokenAttention, type Repo, type Role } from '../core/github';
+import { allReposText, segments, spoken, spokenAttention, type Repo, type Role } from '../core/github';
 import { ago, clean, fmtDuration } from '../core/text';
 
 /** Applies the theme as CSS variables on <html>. Called again when settings or the system appearance change. */
@@ -120,6 +120,7 @@ function MainView({ engine }: { engine: Engine }) {
     ? `${runningAll.length} running · ${next !== null && s.agentMetric !== 'tokens' ? `next done in ~${fmtDuration(next)}` : `${snap.agents.filter((a) => a.state === 'done').length} finished in 24h`}`
     : snap.agents.length ? `Nothing running · ${snap.agents.filter((a) => a.state === 'done').length} finished in 24h` : '';
   const repos = snap.repos.slice(0, s.maxRepos);
+  const allRepos = allReposText(snap.login, snap.repos.length, repos.length);
   const date = new Date(snap.now ? snap.now * 1000 : engine.backend.now()).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
   return (
     <>
@@ -159,6 +160,7 @@ function MainView({ engine }: { engine: Engine }) {
           {snap.ghError && <div class="notice bad" role="alert">{snap.ghError}{repos.length > 0 ? ' Showing the last list.' : ''}</div>}
           {snap.ghLoading && repos.length === 0 && !snap.ghError && <p class="empty">Loading repositories…</p>}
           {repos.length > 0 && <ul class="repos">{repos.map((r) => <RepoRow key={r.url || r.name} r={r} now={snap.now * 1000 || engine.backend.now()} onOpen={(x) => void engine.openRepo(x)} />)}</ul>}
+          {allRepos && <button class="all-repos" onClick={() => void engine.openProfile().catch(() => undefined)} aria-label={`${allRepos}. Open on GitHub.`}>{allRepos}</button>}
         </Section>
       </main>
     </>

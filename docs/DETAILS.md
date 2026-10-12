@@ -15,13 +15,17 @@ are their owners' trademarks (see `THIRD-PARTY-NOTICES.md`).
   tokens, per the *Agent numbers* setting: **Percentage** (default here), **Steps + tokens**, **Both**.
 - Percent: the agent's own `PROGRESS: 40% - note` line (uppercase, line start; 100 shows as 99 until it hands back), else an
   estimate from finished agents with a similar task, the same kind, or the same tool (`~63%`). ETA and "taking longer than
-  usual" follow the Mac rules.
-- **Tray text** `3 running · 2 finished` (tooltip everywhere, title next to the icon on macOS). **Today** list. **Finish
+  usual" follow the Mac rules: past its usual time a row reads `7m 40s over usual (~4m 00s) · 38 steps`.
+- **Tray text**, Mac rules: the title next to the icon (macOS) is the glance text, `63%` for one running agent, `2 · 33%`
+  for two (the average of the known percents, rounded down), `2` when no running agent has a percent yet, nothing when idle.
+  The tooltip (every OS) says it in words: `2 running (average 33%) · 1 finished`. **Today** list. **Finish
   notifications** (one per finish, never for agents already done when the app starts; more than 3 in one scan become one
   "N agents finished"; a failed delivery is retried at most 3 times, saved across restarts).
 - **GitHub** via the `gh` CLI you are logged into: issues, PRs, latest CI result (`CI failing` is always words, calm red),
   **Needs attention** (failing CI or more open PRs than your threshold, naming the repos, `+N`). Errors (gh missing, not logged
-  in, rate limit, timeout) are explained and the last good list stays.
+  in, rate limit, timeout) are explained and the last good list stays. The list ends with `All repositories on
+  github.com/<login>` (`+N more on ...` when the list is cut short); Rust opens `https://github.com/<login>` only for a valid
+  login (`open_profile`, same checks as `open_repo`).
 - Settings: appearance, 5 themes, layouts (cards, glass, solid, compact), progress style, glass amount, blur, agents shown
   (3 to 20, split about 2/3 running), repos shown, PR threshold, notifications, start at login. Unknown keys in `settings.json`
   are kept.
@@ -105,10 +109,10 @@ Tauri `custom-protocol` feature, so it does not embed the page and shows a blank
 
 ## What was verified, and what was not
 
-Run by the author **on macOS only**: vitest (190 tests), tsc, cargo test (`--locked`, 115 passed and 1 ignored; both re-run
+Run by the author **on macOS only**: vitest (194 tests), tsc, cargo test (`--locked`, 117 passed and 1 ignored; both re-run
 2026-10-12) and clippy `--all-targets -D warnings`, `tauri build --debug`, a real run of the debug app for 9 s against synthetic
 transcript folders and a fake gh (tray created, label `3 running · 3 finished` -> `2 running · 4 finished` when a synthetic
-agent handed back, `notified.json` written with the finish id), a real run against 12 synthetic 40 MB transcripts (a 480 MB
+agent handed back; that run was before the glance-text title, which is covered by unit tests only, `notified.json` written with the finish id), a real run against 12 synthetic 40 MB transcripts (a 480 MB
 cold start: the page stays on "Scanning…", no alert, no `notified.json`, main process 149 MB), the privacy canary
 (`npm run privacy`), Playwright screenshots and an accessibility/keyboard smoke test in Chrome, and a comparison of the
 TypeScript+Rust scanner against the Mac app's scanner on about 3,500 synthetic transcripts (identical except the 300-file cap

@@ -17,6 +17,7 @@ ok(await page.locator('[role=img][aria-label]').count() >= 5, 'rings have text l
 ok(await page.locator('.pill.status').count() >= 6, 'every agent has a state word');
 await page.keyboard.press('Tab');
 ok((await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '')).includes('Show transcript'), 'first Tab reaches the first agent card');
+ok((await page.locator('.all-repos').innerText()) === 'All repositories on github.com/demo-user', 'the GitHub list ends with the profile link');
 await page.getByRole('button', { name: 'Settings' }).click();
 ok(await page.locator('h1').innerText() === 'Settings', 'Settings opens');
 await page.getByRole('button', { name: 'Both' }).click();

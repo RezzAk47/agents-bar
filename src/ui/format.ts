@@ -28,7 +28,7 @@ export function subtitle(a: Agent, metric: AgentMetric): string {
   const est = a.pct === null ? '' : a.reported ? `${a.pct}%` : `est. ${a.pct}%`;
   if (metric === 'percent') {
     const rem = remaining(a);
-    if (overrun(a)) return `Taking longer than usual · ${fmtStats({ ...a, tokensNew: null })}`;
+    if (overrun(a)) return `${fmtDuration(elapsed(a) - a.typical!)} over usual (~${fmtDuration(a.typical)}) · ${fmtStats({ ...a, tokensNew: null })}`;
     const parts: string[] = [];
     if (rem !== null) parts.push(`~${fmtDuration(rem)} left`);
     if (a.note) parts.push(a.note);

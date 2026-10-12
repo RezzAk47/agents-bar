@@ -15,6 +15,7 @@ fn main() {
         "gh_run_list",
         "reveal_transcript",
         "open_repo",
+        "open_profile",
         "notify",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(app))

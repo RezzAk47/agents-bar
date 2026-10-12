@@ -80,7 +80,7 @@ export function memoryBackend(o: PreviewOptions = {}): Backend {
     scan: new MemoryScan(o.empty ? [] : demoScanFiles(nowSec, o.hostile)),
     gh: demoGh(nowSec, o.gh ?? 'ok', o.hostile),
     notify: async () => true, notifyOff: true,
-    setTrayLabel: async () => {}, hide: async () => {}, quit: async () => {}, revealTranscript: async () => {}, openRepo: async () => {},
+    setTrayLabel: async () => {}, hide: async () => {}, quit: async () => {}, revealTranscript: async () => {}, openRepo: async () => {}, openProfile: async () => {},
     autostart: { isEnabled: async () => false, set: async () => {} },
     onTick: (cb) => { const t = setInterval(cb, 3000); return () => clearInterval(t); },
     onShown: () => () => {},

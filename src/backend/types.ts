@@ -19,13 +19,16 @@ export interface Backend {
   /** True when notifications are switched off for this run (AGENTSBAR_NO_NOTIFICATIONS). */
   notifyOff: boolean;
   now: () => number; // ms
-  setTrayLabel(label: string): Promise<void>;
+  /** `label` is the tooltip; `title` the short glance text beside the icon (macOS shows it), '' for none. */
+  setTrayLabel(label: string, title: string): Promise<void>;
   hide(): Promise<void>;
   quit(): Promise<void>;
   /** Shows a transcript in the file manager. The Rust side only accepts paths its own scanner found. */
   revealTranscript(path: string): Promise<void>;
   /** The Rust side builds https://github.com/<owner>/<repo> from the validated names and opens it. */
   openRepo(slug: string): Promise<void>;
+  /** The Rust side builds https://github.com/<login> from the validated login and opens it. */
+  openProfile(login: string): Promise<void>;
   autostart: { isEnabled(): Promise<boolean>; set(on: boolean): Promise<void> } | null;
   onTick(cb: () => void): () => void;
   /** The computer woke from sleep (Rust sends it from its tick thread). Optional: the browser preview has none. */

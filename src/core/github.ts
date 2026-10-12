@@ -182,6 +182,14 @@ export async function fetchWithStatus(book: StatusBook, gh: GhBackend, now: numb
 
 // ---- text ----------------------------------------------------------------------------------------------------
 
+/** The last line of the GitHub list (Mac parity): 'All repositories on github.com/<login>', or '+N more on
+ * github.com/<login>' when the list was cut short. null when there is no valid login to link to. */
+export function allReposText(login: string, total: number, shown: number): string | null {
+  if (!OWNER_RE.test(login)) return null;
+  const more = total - shown;
+  return more > 0 ? `+${more} more on github.com/${login}` : `All repositories on github.com/${login}`;
+}
+
 const plural = (n: number, word: string, pl?: string) => `${n.toLocaleString('en-US')} ${n === 1 ? word : pl ?? `${word}s`}`;
 const ciOf = (r: Partial<Repo> | null | undefined): Ci | null => (r && (CI_VALUES as readonly unknown[]).includes(r.ci) ? (r.ci as Ci) : null);
 const numOf = (v: unknown): number | null => num(v);

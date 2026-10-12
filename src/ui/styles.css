@@ -65,8 +65,9 @@ html[dir='rtl'] .chev { transform: scaleX(-1); }
 .t-more, .more { color: var(--text2); font-size: 13px; padding: 6px 8px; margin: 0; }
 
 .repos { display: grid; gap: 4px; }
+.all-repos { width: 100%; min-width: 0; overflow-wrap: anywhere; text-align: start; background: transparent; color: var(--text2); border: 0; border-radius: 10px; padding: 7px 8px; font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .repo { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; text-align: start; background: transparent; border: 0; border-radius: 10px; padding: 7px 8px; cursor: pointer; }
-.repo:hover { background: color-mix(in srgb, var(--card) 80%, transparent); }
+.repo:hover, .all-repos:hover { background: color-mix(in srgb, var(--card) 80%, transparent); }
 .repo-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 10px; align-items: baseline; min-width: 0; }
 .repo-name { font-weight: 650; display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lock { width: 12px; height: 12px; color: var(--text2); flex: none; }

@@ -37,11 +37,12 @@ export async function tauriBackend(): Promise<Backend> {
     notifyOff: info.noNotifications,
     // Sent from Rust, which reports a real failure (denied, no daemon) so the retries are driven by what actually happened.
     notify: (title, body) => invoke<void>('notify', { title, body }).then(() => true, () => false),
-    setTrayLabel: (label) => invoke<void>('set_tray_label', { label }),
+    setTrayLabel: (label, title) => invoke<void>('set_tray_label', { label, title }),
     hide: () => invoke<void>('hide_popup'),
     quit: () => invoke<void>('quit_app'),
     revealTranscript: (path) => invoke<void>('reveal_transcript', { path }).catch((e) => { throw new Error(errMessage(e)); }),
     openRepo: (slug) => invoke<void>('open_repo', { slug }).catch((e) => { throw new Error(errMessage(e)); }),
+    openProfile: (login) => invoke<void>('open_profile', { login }).catch((e) => { throw new Error(errMessage(e)); }),
     autostart: { isEnabled: () => isEnabled(), set: (on) => (on ? enable() : disable()) },
     onTick: (cb) => subscribe('tick', cb),
     onSlept: (cb) => subscribe('slept', cb),

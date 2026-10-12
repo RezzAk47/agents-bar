@@ -20,6 +20,7 @@
     "allow-gh-run-list",
     "allow-reveal-transcript",
     "allow-open-repo",
+    "allow-open-profile",
     "allow-notify",
     "autostart:allow-enable",
     "autostart:allow-disable",

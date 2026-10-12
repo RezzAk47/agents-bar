@@ -57,6 +57,11 @@ pub fn repo_url(slug: &str) -> Option<String> {
     split_slug(slug).map(|(o, r)| format!("https://github.com/{o}/{r}"))
 }
 
+/// The only URL the app opens for a profile ("All repositories on github.com/<login>"): built here from a validated login.
+pub fn profile_url(login: &str) -> Option<String> {
+    valid_owner(login).then(|| format!("https://github.com/{login}"))
+}
+
 fn is_exe(p: &std::path::Path) -> bool {
     p.is_file()
 }
@@ -363,6 +368,37 @@ mod name_tests {
             Some("https://github.com/me/tool")
         );
         assert_eq!(repo_url("me/tool?x=1"), None);
+    }
+
+    #[test]
+    fn the_profile_link_is_built_only_from_a_valid_login() {
+        assert_eq!(
+            profile_url("RezzAk47").as_deref(),
+            Some("https://github.com/RezzAk47")
+        );
+        assert_eq!(
+            profile_url("name_company").as_deref(),
+            Some("https://github.com/name_company")
+        );
+        for bad in [
+            "",
+            "-me",
+            "me-",
+            "a--b",
+            "me/tool",
+            "me?tab=repositories",
+            "me#x",
+            "me@evil.com",
+            "evil.com",
+            "https://evil.com",
+            "m e",
+            "me\n",
+            "..",
+            "m\u{e9}",
+            &"a".repeat(40),
+        ] {
+            assert_eq!(profile_url(bad), None, "{bad:?}");
+        }
     }
 
     #[test]
