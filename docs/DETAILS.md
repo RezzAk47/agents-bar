@@ -1,16 +1,16 @@
 # Agents Bar: technical details
 
 The [README](../README.md) is the short version. This page has the full detail: what the app reads, how it is built, what
-was tested, and how it differs from the Mac [agents-bar](https://github.com/RezzAk47/agents-bar).
+was tested, and how it differs from the author's earlier Mac-only version.
 
-Agents Bar is an independent project, not affiliated with Anthropic, OpenAI or GitHub. Claude, Claude Code, Codex and GitHub
-are their owners' trademarks (see `THIRD-PARTY-NOTICES.md`).
+Agents Bar is an independent project, not affiliated with or endorsed by the makers of the AI coding tools it works with or by
+GitHub. Product names are their owners' trademarks (see `THIRD-PARTY-NOTICES.md`).
 
 ## Features in detail
 
-- Reads the agents' own transcript files (read-only, never writes or changes them): Claude Code subagents under
-  `~/.claude/projects/*/*/subagents/agent-*.jsonl` (Windows `%USERPROFILE%\.claude\projects`) and Codex sessions under
-  `~/.codex/sessions/*/*/*/rollout-*.jsonl`.
+- Reads the agents' own transcript files (read-only, never writes or changes them): the subagent and session logs that the
+  supported AI coding tools keep in hidden folders in your home directory (on Windows, under `%USERPROFILE%`). The exact
+  folder patterns are in `src-tauri/src/scanner.rs`.
 - **Running / Recent cards** with state word and symbol (Running, Done, Stalled), a ring (or bar) with the percent, or steps and
   tokens, per the *Agent numbers* setting: **Percentage** (default here), **Steps + tokens**, **Both**.
 - Percent: the agent's own `PROGRESS: 40% - note` line (uppercase, line start; 100 shows as 99 until it hands back), else an
@@ -37,8 +37,8 @@ are their owners' trademarks (see `THIRD-PARTY-NOTICES.md`).
 |---|---|---|---|
 | App data (`settings.json`, `notified.json`) | `~/Library/Application Support/AgentsBarCross` | `%APPDATA%\AgentsBarCross` | `${XDG_DATA_HOME:-~/.local/share}/AgentsBarCross` |
 
-It never touches `~/.agents-bar` (the Mac bars' folder). Overrides: `AGENTSBAR_DATA_DIR`, `AGENTSBAR_CLAUDE_DIR`,
-`AGENTSBAR_CODEX_DIR`, `AGENTSBAR_GH` (path of the gh executable; tests use `scripts/fake-gh.sh`),
+It never touches `~/.agents-bar` (the Mac bars' folder). Overrides: `AGENTSBAR_DATA_DIR`, one transcript-folder override per
+supported tool (names in `src-tauri/src/scanner.rs`), `AGENTSBAR_GH` (path of the gh executable; tests use `scripts/fake-gh.sh`),
 `AGENTSBAR_NO_NOTIFICATIONS=1` (nothing is sent to the OS, finishes are still recorded). The four path overrides are **test
 hooks: debug builds honour them, release builds ignore them** unless the run sets `AGENTSBAR_TEST=1`, so a stray variable in
 your environment cannot redirect a normal run.
@@ -54,8 +54,8 @@ your environment cannot redirect a normal run.
 - **A big first start is one incomplete pass.** While a pass is not finished (`more = true`) the page shows
   "Scanning transcripts…", judges no states and announces no finishes; the first complete pass is the baseline, so a cold start
   never produces false "Agent finished" alerts.
-- **TypeScript (`src/core`)** owns all meaning: states, steps, tokens (per `message.id` the max of each field; Codex latest
-  `total_token_usage`), percent, ETA, finish watcher, Today, GitHub parsing and text, settings. It is pure and unit tested. The
+- **TypeScript (`src/core`)** owns all meaning: states, steps, tokens (per `message.id` the max of each field, or the latest
+  `total_token_usage` for logs that report a running total), percent, ETA, finish watcher, Today, GitHub parsing and text, settings. It is pure and unit tested. The
   Rust slimmer is tested against the same fixtures (`tests/fixtures/transcripts` are slimmed by `cargo test slim_golden` into
   `tests/fixtures/slim`; `tests/fixtures.test.ts` checks that full and slim records give identical results).
 - **Ticks:** Rust emits a tick every 3 s; the page rescans changed files only (one `stat` per known file) and does a folder
@@ -78,9 +78,9 @@ rendered page:
 - per record: the timestamp, the record type, message and request ids, token counts, tool names and call ids;
 - lines of an agent's reply that are `PROGRESS: NN% - note` report lines (the marker onward, at most 400 characters), nothing
   else of any reply;
-- Codex: **one** text per file, the first user prompt that is not injected context (AGENTS.md, environment),
+- session logs: **one** text per file, the first user prompt that is not injected context (AGENTS.md, environment),
   whitespace-collapsed and cut to 200 characters (the page shows 80); later user turns, tool arguments and outputs are never sent;
-- Claude subagents: the `description` and `agentType` from the sibling `.meta.json` (that is the task title shown on the
+- subagent logs: the `description` and `agentType` from the sibling `.meta.json` (that is the task title shown on the
   card), cut to 400 characters;
 - file paths (to show the project name in a notification and to reveal a transcript in the file manager).
 
@@ -125,7 +125,7 @@ installs and starts the app but does not click the tray icon). Before CI existed
 code has `cfg` branches for them (data folders, `USERPROFILE`, no inode on Windows, sleep detector, `gh.exe` search).
 Notifications were not sent to the real OS in any test.
 
-Performance (macOS, synthetic, 300 files, 56 MB of Claude transcripts + Codex): cold scan 217 ms in Rust (release, 2 calls),
+Performance (macOS, synthetic, 300 files, 56 MB of transcripts from both supported tools): cold scan 217 ms in Rust (release, 2 calls),
 warm rescan 1.1 ms, folder walk 1.6 ms, TypeScript cold feed 72 ms, warm 0.16 ms. The debug app held 215 to 263 MB (main
 process) while reading an 87 MB tree; a release build is smaller (not measured).
 
@@ -155,8 +155,8 @@ process) while reading an 87 MB tree; a release build is smaller (not measured).
   levels and loses the agent.
 - Glass layout: text colours are computed to keep 4.5:1 over the translucent card at every glass amount and over the gradient
   (tested), which can make the text slightly stronger than the Mac glass.
-- Transcript shapes were learned from the Mac implementation; Codex `turn_aborted` and the end of Claude subagent logs are only
-  tested with made-up logs, as on the Mac.
+- Transcript shapes were learned from the Mac implementation; an aborted turn (`turn_aborted`) and the end of a subagent log
+  are only tested with made-up logs, as on the Mac.
 - A half-written last line that stays unfinished is re-read from its start on every tick (bounded by the 4 MB line cap).
 - `npm audit`: 0 vulnerabilities at the time of writing. Rust crates were not audited (`cargo audit` was not run).
 

@@ -1,6 +1,6 @@
 # Agents Bar
 
-[![CI](https://github.com/RezzAk47/agents-bar-cross/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RezzAk47/agents-bar-cross/actions/workflows/ci.yml)
+[![CI](https://github.com/RezzAk47/agents-bar/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RezzAk47/agents-bar/actions/workflows/ci.yml)
 ![Platforms: Windows, Linux, macOS](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)
 ![Version 0.1.1](https://img.shields.io/badge/version-0.1.1-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -9,16 +9,13 @@
 
 Agents Bar is a small tray / menu-bar app for Windows, Linux and macOS. It watches your AI coding agents' local transcript
 files and shows each agent's progress, time left, steps and tokens, notifies you when one finishes, and lists your GitHub
-repositories with their CI status. Built with Tauri 2 (Rust) and Preact. It is the cross-platform sibling of the Mac-only
-[agents-bar](https://github.com/RezzAk47/agents-bar).
+repositories with their CI status. Built with Tauri 2 (Rust) and Preact.
 
 | Running and recent | GitHub and needs attention | Settings |
 |---|---|---|
 | <img src="docs/running-recent-light.png" width="260" alt="Agents Bar popup in light mode with running and recent agents"> | <img src="docs/github-dark.png" width="260" alt="Agents Bar popup in dark mode with the GitHub section and a needs-attention banner"> | <img src="docs/settings-light.png" width="260" alt="Agents Bar settings pane in light mode"> |
 
 <sub>Screenshots use made-up agents and repos. More in the [gallery](docs/GALLERY.md).</sub>
-
-Supported tools: Claude Code subagents and Codex CLI sessions; GitHub through the `gh` CLI.
 
 ## Features
 
@@ -34,7 +31,7 @@ Supported tools: Claude Code subagents and Codex CLI sessions; GitHub through th
 
 ## Download
 
-Installers will be on the [Releases](https://github.com/RezzAk47/agents-bar-cross/releases) page (coming soon). Until then,
+Installers will be on the [Releases](https://github.com/RezzAk47/agents-bar/releases) page (coming soon). Until then,
 [build from source](#build-from-source).
 
 The builds are not code-signed, so Windows SmartScreen and macOS Gatekeeper will warn the first time you open the app.
@@ -57,9 +54,9 @@ On Linux under Wayland the popup opens wherever your desktop puts it; GNOME need
 
 | What | Details |
 |---|---|
-| Reads | Your agents' transcript files, read-only: `~/.claude/projects/*/*/subagents/agent-*.jsonl` and `~/.codex/sessions/*/*/*/rollout-*.jsonl` (last 24 hours). |
+| Reads | The session and transcript files that supported AI coding tools keep in hidden folders in your home directory, read-only (last 24 hours). |
 | Shows | Only timestamps, token counts, tool names, task titles, `PROGRESS` lines and the first prompt of a session (cut to 200 characters). Replies, code and tool output never reach the window; a test checks this. |
-| Network | None of its own. The GitHub section runs your logged-in `gh` CLI with fixed commands. |
+| Network | None of its own: it never contacts any AI coding tool's servers. The GitHub section runs your logged-in `gh` CLI with fixed commands. |
 | Stores | `settings.json` and `notified.json` in the app's data folder on your computer. Transcripts are never changed. |
 | Never | No analytics, no telemetry, no account, nothing sent to the author. |
 
@@ -73,8 +70,8 @@ system (on Linux: WebKitGTK 4.1 and an AppIndicator library, see `.github/workfl
 [GitHub CLI](https://cli.github.com/) (`gh auth login`); the rest works without it.
 
 ```sh
-git clone https://github.com/RezzAk47/agents-bar-cross.git
-cd agents-bar-cross
+git clone https://github.com/RezzAk47/agents-bar.git
+cd agents-bar
 npm ci --ignore-scripts
 npm run tauri build          # installer for this OS, in src-tauri/target/release/bundle
 npm run tauri dev            # or run it in development mode
