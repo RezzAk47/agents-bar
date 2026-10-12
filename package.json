@@ -2,7 +2,7 @@
   "name": "agents-bar",
   "version": "0.1.1",
   "private": true,
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "description": "Agents Bar for Windows, Linux and macOS (Tauri tray app): running and finished AI coding agents plus GitHub repos with CI status.",
   "scripts": {

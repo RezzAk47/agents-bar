@@ -5,7 +5,7 @@ description = "Agents Bar for Windows, Linux and macOS: a tray app showing runni
 edition = "2021"
 rust-version = "1.90"
 publish = false
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 
 [lib]
 name = "agents_bar_lib"
