@@ -120,7 +120,7 @@ function MainView({ engine }: { engine: Engine }) {
     ? `${runningAll.length} running · ${next !== null && s.agentMetric !== 'tokens' ? `next done in ~${fmtDuration(next)}` : `${snap.agents.filter((a) => a.state === 'done').length} finished in 24h`}`
     : snap.agents.length ? `Nothing running · ${snap.agents.filter((a) => a.state === 'done').length} finished in 24h` : '';
   const repos = snap.repos.slice(0, s.maxRepos);
-  const allRepos = allReposText(snap.login, snap.repos.length, repos.length);
+  const allRepos = allReposText(snap.login, snap.repos, repos.length);
   const date = new Date(snap.now ? snap.now * 1000 : engine.backend.now()).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
   return (
     <>

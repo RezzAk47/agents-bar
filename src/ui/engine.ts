@@ -2,7 +2,7 @@
 // snapshot to the UI after every change. No DOM here, so it is tested without a browser.
 import { AgentScanner, barState, barText, trayLabel, type Agent } from '../core/agents';
 import { FinishWatcher, NotifiedStore, groupNotification, notification, today } from '../core/history';
-import { OWNER_RE, StatusBook, attention, fetchWithStatus, ghErrorText, summary, type Hit, type Repo } from '../core/github';
+import { OWNER_RE, REPO_FETCH_LIMIT, StatusBook, attention, fetchWithStatus, ghErrorText, summary, type Hit, type Repo } from '../core/github';
 import { SettingsStore } from '../core/settingsStore';
 import { NOTIFIED_FILE } from '../core/settings';
 import { errMessage } from '../core/io';
@@ -130,7 +130,7 @@ export class Engine {
     this.emit();
     try {
       if (!this.backend.gh) throw new Error('GH_MISSING');
-      const [login, repos] = await fetchWithStatus(this.book, this.backend.gh, this.backend.now() / 1000, 50);
+      const [login, repos] = await fetchWithStatus(this.book, this.backend.gh, this.backend.now() / 1000, REPO_FETCH_LIMIT);
       this.snap = { ...this.snap, repos, login, ghError: null, ghUpdated: this.backend.now() };
     } catch (e) {
       this.snap = { ...this.snap, ghError: ghErrorText(e) }; // the last good list stays on screen

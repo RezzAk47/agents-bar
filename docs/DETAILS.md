@@ -24,8 +24,9 @@ are their owners' trademarks (see `THIRD-PARTY-NOTICES.md`).
 - **GitHub** via the `gh` CLI you are logged into: issues, PRs, latest CI result (`CI failing` is always words, calm red),
   **Needs attention** (failing CI or more open PRs than your threshold, naming the repos, `+N`). Errors (gh missing, not logged
   in, rate limit, timeout) are explained and the last good list stays. The list ends with `All repositories on
-  github.com/<login>` (`+N more on ...` when the list is cut short); Rust opens `https://github.com/<login>` only for a valid
-  login (`open_profile`, same checks as `open_repo`).
+  github.com/<login>` (`+N more on ...` when the list on screen is cut short, `More on ...` when gh returned the full 50 and
+  may have cut it); it is left out when no listed repository is on github.com. Rust opens
+  `https://github.com/<login>?tab=repositories` only for a valid login (`open_profile`, same checks as `open_repo`).
 - Settings: appearance, 5 themes, layouts (cards, glass, solid, compact), progress style, glass amount, blur, agents shown
   (3 to 20, split about 2/3 running), repos shown, PR threshold, notifications, start at login. Unknown keys in `settings.json`
   are kept.
@@ -109,7 +110,7 @@ Tauri `custom-protocol` feature, so it does not embed the page and shows a blank
 
 ## What was verified, and what was not
 
-Run by the author **on macOS only**: vitest (194 tests), tsc, cargo test (`--locked`, 117 passed and 1 ignored; both re-run
+Run by the author **on macOS only**: vitest (197 tests), tsc, cargo test (`--locked`, 118 passed and 1 ignored; both re-run
 2026-10-12) and clippy `--all-targets -D warnings`, `tauri build --debug`, a real run of the debug app for 9 s against synthetic
 transcript folders and a fake gh (tray created, label `3 running · 3 finished` -> `2 running · 4 finished` when a synthetic
 agent handed back; that run was before the glance-text title, which is covered by unit tests only, `notified.json` written with the finish id), a real run against 12 synthetic 40 MB transcripts (a 480 MB

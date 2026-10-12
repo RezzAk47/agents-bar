@@ -140,16 +140,25 @@ pub fn tray_text(text: &str, max: usize) -> String {
     text.chars().filter(|c| !c.is_control()).take(max).collect()
 }
 
+/// The tray title: cleaned and capped; an empty one is None, which removes the title instead of leaving a blank gap.
+pub fn tray_title(title: &str) -> Option<String> {
+    let t = tray_text(title, 24);
+    (!t.trim().is_empty()).then_some(t)
+}
+
 /// `label` is the tooltip; `title` is the short glance text beside the icon ("63%", "2 · 33%"), "" when nothing runs.
 #[tauri::command]
 fn set_tray_label(state: State<AppState>, label: String, title: String) {
     let label = tray_text(&label, 120);
-    let title = tray_text(&title, 24);
+    let title = tray_title(&title);
     if let Some(tray) = state.tray.lock().unwrap().as_ref() {
-        eprintln!("agents-bar: tray label: {label} [{title}]");
+        eprintln!(
+            "agents-bar: tray label: {label} [{}]",
+            title.as_deref().unwrap_or("")
+        );
         let _ = tray.set_tooltip(Some(&label));
         #[cfg(target_os = "macos")]
-        let _ = tray.set_title(if title.is_empty() { None } else { Some(title) });
+        let _ = tray.set_title(title);
         #[cfg(not(target_os = "macos"))]
         let _ = title;
     }
@@ -558,7 +567,8 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        notification_text, off_main_for, suppress_reopen, tray_text, BLUR_REOPEN_SUPPRESS, TRAY_MID,
+        notification_text, off_main_for, suppress_reopen, tray_text, tray_title,
+        BLUR_REOPEN_SUPPRESS, TRAY_MID,
     };
     use std::time::Duration;
 
@@ -580,6 +590,15 @@ mod tests {
         assert_eq!(tray_text("2 · 33%\n\u{7}", 24), "2 · 33%");
         assert_eq!(tray_text(&"9".repeat(100), 24).chars().count(), 24);
         assert_eq!(tray_text("", 24), "");
+    }
+
+    #[test]
+    fn an_empty_tray_title_removes_the_title() {
+        assert_eq!(tray_title(""), None, "idle: no title, not a blank one");
+        assert_eq!(tray_title("  "), None);
+        assert_eq!(tray_title("\n\u{7}"), None, "only control characters");
+        assert_eq!(tray_title("63%").as_deref(), Some("63%"));
+        assert_eq!(tray_title("2 · 33%").as_deref(), Some("2 · 33%"));
     }
 
     #[test]

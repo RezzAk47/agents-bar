@@ -182,12 +182,17 @@ export async function fetchWithStatus(book: StatusBook, gh: GhBackend, now: numb
 
 // ---- text ----------------------------------------------------------------------------------------------------
 
-/** The last line of the GitHub list (Mac parity): 'All repositories on github.com/<login>', or '+N more on
- * github.com/<login>' when the list was cut short. null when there is no valid login to link to. */
-export function allReposText(login: string, total: number, shown: number): string | null {
-  if (!OWNER_RE.test(login)) return null;
-  const more = total - shown;
-  return more > 0 ? `+${more} more on github.com/${login}` : `All repositories on github.com/${login}`;
+/** How many repositories one refresh asks gh for. A list this long may have been cut by gh, so its length is not a count. */
+export const REPO_FETCH_LIMIT = 50;
+
+/** The last line of the GitHub list (Mac parity): 'All repositories on github.com/<login>', '+N more on github.com/<login>'
+ * when the list on screen was cut short, or 'More on github.com/<login>' when gh itself may have cut it (no wrong number).
+ * null when there is no valid login, or when no listed repository is on github.com (a GitHub Enterprise host). */
+export function allReposText(login: string, repos: readonly Pick<Repo, 'url'>[], shown: number, fetchLimit = REPO_FETCH_LIMIT): string | null {
+  if (!OWNER_RE.test(login) || !repos.some((r) => r.url.startsWith('https://github.com/'))) return null;
+  const more = repos.length - shown;
+  if (more <= 0) return `All repositories on github.com/${login}`;
+  return repos.length >= fetchLimit ? `More on github.com/${login}` : `+${more} more on github.com/${login}`;
 }
 
 const plural = (n: number, word: string, pl?: string) => `${n.toLocaleString('en-US')} ${n === 1 ? word : pl ?? `${word}s`}`;

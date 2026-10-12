@@ -57,9 +57,10 @@ pub fn repo_url(slug: &str) -> Option<String> {
     split_slug(slug).map(|(o, r)| format!("https://github.com/{o}/{r}"))
 }
 
-/// The only URL the app opens for a profile ("All repositories on github.com/<login>"): built here from a validated login.
+/// The only URL the app opens for a profile ("All repositories on github.com/<login>"): built here from a validated login,
+/// with a fixed query that opens the repositories tab.
 pub fn profile_url(login: &str) -> Option<String> {
-    valid_owner(login).then(|| format!("https://github.com/{login}"))
+    valid_owner(login).then(|| format!("https://github.com/{login}?tab=repositories"))
 }
 
 fn is_exe(p: &std::path::Path) -> bool {
@@ -374,11 +375,11 @@ mod name_tests {
     fn the_profile_link_is_built_only_from_a_valid_login() {
         assert_eq!(
             profile_url("RezzAk47").as_deref(),
-            Some("https://github.com/RezzAk47")
+            Some("https://github.com/RezzAk47?tab=repositories")
         );
         assert_eq!(
             profile_url("name_company").as_deref(),
-            Some("https://github.com/name_company")
+            Some("https://github.com/name_company?tab=repositories")
         );
         for bad in [
             "",
