@@ -1,4 +1,4 @@
-# Agents Bar (cross-platform) gallery
+# Agents Bar gallery
 
 More screenshots for the [README](../README.md). All of them use made-up sample data, never real data.
 
@@ -9,6 +9,12 @@ More screenshots for the [README](../README.md). All of them use made-up sample 
 Dark version of the main list, with percentages.
 
 ![Running and recent (dark)](running-recent-dark.png)
+
+### Steps and tokens (light)
+
+Agent numbers set to Steps + tokens.
+
+![Steps and tokens (light)](tokens-light.png)
 
 ### Steps, tokens and percentage (dark)
 

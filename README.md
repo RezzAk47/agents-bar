@@ -1,111 +1,112 @@
-# Agents Bar (cross-platform)
+# Agents Bar
 
-A tray / menu-bar app for **Windows, Linux and macOS** that shows your running and finished **Claude Code** and **Codex** agents, plus your GitHub repositories with CI status. It is a separate app with its own tray icon (a Tauri v2 shell with a Preact popup). It is the cross-platform sibling of the Mac-only [agents-bar](https://github.com/RezzAk47/agents-bar) and follows its behaviour. Both are based on CLI-Usage by Nima Ansari (see Credit).
+[![CI](https://github.com/RezzAk47/agents-bar-cross/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RezzAk47/agents-bar-cross/actions/workflows/ci.yml)
+![Platforms: Windows, Linux, macOS](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)
+![Version 0.1.1](https://img.shields.io/badge/version-0.1.1-blue)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Status: early.** Developed on macOS. CI (build, tests, screenshots) passes on Windows, Linux and macOS. The release installers were installed and started in an automated smoke test on all three systems (Linux on x86_64 only); that test does not click the tray icon, and nobody has used the Windows or Linux builds by hand yet. Downloads will be unsigned, so Windows SmartScreen and macOS Gatekeeper will warn. Not affiliated with Anthropic or OpenAI; Claude and Codex are their owners' trademarks.
+**See your running and finished AI coding agents, and your GitHub CI, right in your tray.**
 
-![running and recent, light](docs/running-recent-light.png)
-![github and needs attention, dark](docs/github-dark.png)
-![steps and tokens, light](docs/tokens-light.png)
-![settings, light](docs/settings-light.png)
+Agents Bar is a small tray / menu-bar app for Windows, Linux and macOS. It watches your AI coding agents' local transcript
+files and shows each agent's progress, time left, steps and tokens, notifies you when one finishes, and lists your GitHub
+repositories with their CI status. Built with Tauri 2 (Rust) and Preact. It is the cross-platform sibling of the Mac-only
+[agents-bar](https://github.com/RezzAk47/agents-bar).
 
-All screenshots use **synthetic** agents and repos. More screenshots: [docs/GALLERY.md](docs/GALLERY.md)
+| Running and recent | GitHub and needs attention | Settings |
+|---|---|---|
+| <img src="docs/running-recent-light.png" width="260" alt="Agents Bar popup in light mode with running and recent agents"> | <img src="docs/github-dark.png" width="260" alt="Agents Bar popup in dark mode with the GitHub section and a needs-attention banner"> | <img src="docs/settings-light.png" width="260" alt="Agents Bar settings pane in light mode"> |
 
-## What it does
+<sub>Screenshots use made-up agents and repos. More in the [gallery](docs/GALLERY.md).</sub>
 
-- Reads the agents' own transcript files (read-only, never writes or changes them): Claude Code subagents under `~/.claude/projects/*/*/subagents/agent-*.jsonl` (Windows `%USERPROFILE%\.claude\projects`) and Codex sessions under `~/.codex/sessions/*/*/*/rollout-*.jsonl`.
-- **Running / Recent cards** with state word and symbol (Running, Done, Stalled), a ring (or bar) with the percent, or steps and tokens, per the *Agent numbers* setting: **Percentage** (default here), **Steps + tokens**, **Both**.
-- Percent: the agent's own `PROGRESS: 40% - note` line (uppercase, line start; 100 shows as 99 until it hands back), else an estimate from finished agents with a similar task, the same kind, or the same tool (`~63%`). ETA and "taking longer than usual" follow the Mac rules.
-- **Tray text** `3 running · 2 finished` (tooltip everywhere, title next to the icon on macOS). **Today** list. **Finish notifications** (one per finish, never for agents already done when the app starts, more than 3 in one scan become one "N agents finished"; a failed delivery is retried at most 3 times, saved across restarts).
-- **GitHub** via the `gh` CLI you are logged into: issues, PRs, latest CI result (`CI failing` is always words, calm red), **Needs attention** (failing CI or more open PRs than your threshold, naming the repos, `+N`). Errors (gh missing, not logged in, rate limit, timeout) are explained and the last good list stays.
-- Settings: appearance, 5 themes, layouts (cards, glass, solid, compact), progress style, glass amount, blur, agents shown (3 to 20, split about 2/3 running), repos shown, PR threshold, notifications, start at login. Unknown keys in `settings.json` are kept.
+Supported tools: Claude Code subagents and Codex CLI sessions; GitHub through the `gh` CLI.
 
-## Run
+## Features
 
-Requirements: Node 24+, Rust **1.90** or newer, the Tauri v2 platform packages (Linux: WebKitGTK 4.1 and an AppIndicator library, see `.github/workflows/ci.yml`).
+- Running and Recent cards: Running, Done or Stalled, with a progress ring, steps and tokens, or both.
+- Progress from the agent's own `PROGRESS: 40% - note` lines, otherwise an estimate from similar finished agents, plus time left.
+- Tray text such as `3 running · 2 finished` (next to the icon on macOS, a tooltip on every OS).
+- A notification when an agent finishes, and a Today list.
+- GitHub section: issues, PRs and the latest CI result per repo, with a "Needs attention" banner for failing CI or too many open PRs.
+- Light and dark, 5 colour themes, four layouts (Cards, Glass, Solid, Compact), start at login.
 
-```
-npm ci
-npm run tauri build -- --debug     # or: npm run tauri dev
-```
+## Download
 
-**Build the app with `tauri build` (or `tauri dev`), never plain `cargo build --release`.** A plain cargo build is not given the Tauri `custom-protocol` feature, so it does not embed the page and shows a blank window.
+Installers will be on the [Releases](https://github.com/RezzAk47/agents-bar-cross/releases) page (coming soon). Until then,
+[build from source](#build-from-source).
 
-Tests and checks: `npx vitest run`, `npx tsc --noEmit`, `cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings`, `npm run build && npm run ui:smoke && npm run shots`, perf: `cargo test --release perf_300 -- --ignored --nocapture`.
+The builds are not code-signed, so Windows SmartScreen and macOS Gatekeeper will warn the first time you open the app.
 
-### Where things live and environment overrides
+## Platform support
 
-| | macOS | Windows | Linux |
+| | Windows | Linux | macOS |
 |---|---|---|---|
-| App data (settings.json, notified.json) | `~/Library/Application Support/AgentsBarCross` | `%APPDATA%\AgentsBarCross` | `${XDG_DATA_HOME:-~/.local/share}/AgentsBarCross` |
+| Installer (when released) | `.exe` (NSIS), x64 | `.deb` and `.AppImage`, x86_64 | `.dmg`, Apple silicon and Intel |
+| CI build and tests | Passing | Passing | Passing |
+| Installer smoke test (installs and starts) | Passing | Passing | Passing |
+| Tested by hand | Not yet | Not yet | Yes |
+| Text next to the tray icon | Tooltip only | Tooltip only | Yes |
+| Open the popup | Click the tray icon | Tray menu, "Show Agents Bar" | Click the menu-bar icon |
 
-It never touches `~/.agents-bar` (the Mac bars' folder). Overrides: `AGENTSBAR_DATA_DIR`, `AGENTSBAR_CLAUDE_DIR`, `AGENTSBAR_CODEX_DIR`, `AGENTSBAR_GH` (path of the gh executable; tests use `scripts/fake-gh.sh`), `AGENTSBAR_NO_NOTIFICATIONS=1` (nothing is sent to the OS, finishes are still recorded). These four path overrides are **test hooks: debug builds honour them, release builds ignore them** unless the run sets `AGENTSBAR_TEST=1`, so a stray variable in your environment cannot redirect a normal run.
+On Linux under Wayland the popup opens wherever your desktop puts it; GNOME needs the AppIndicator extension. Details in
+[docs/DETAILS.md](docs/DETAILS.md#differences-from-the-mac-bars-and-known-limits).
 
-## Design: who does what (one source of truth)
+## Privacy
 
-- **Rust (`src-tauri/src/scanner.rs`)** owns every transcript byte: the folder walk (24 h lookback, newest 300 files per tool, symlinks to files and to folders never followed, only regular files opened, entry cap), per-file offsets, line splitting (half-written last line waits; a line over 4 MB is skipped without being held in memory, and the skip is remembered and counted against the read budget, so a huge file without newlines costs one budget per tick instead of a re-read), replaced/truncated file detection (inode, size, first 64 bytes), per-call read budgets (4 MB per file, 8 MB per call), and **slimming**. A line nested too deep for the JSON reader is skipped, the rest of the file is kept.
-- **A big first start is one incomplete pass.** While a pass is not finished (`more = true`) the page shows "Scanning transcripts…", judges no states and announces no finishes; the first complete pass is the baseline, so a cold start never produces false "Agent finished" alerts.
-- **TypeScript (`src/core`)** owns all meaning: states, steps, tokens (per `message.id` the max of each field; Codex latest `total_token_usage`), percent, ETA, finish watcher, Today, GitHub parsing and text, settings. It is pure and unit tested. The Rust slimmer is tested against the same fixtures (`tests/fixtures/transcripts` are slimmed by `cargo test slim_golden` into `tests/fixtures/slim`; `tests/fixtures.test.ts` checks that full and slim records give identical results).
-- **Ticks:** Rust emits a tick every 3 s; the page rescans changed files only (one `stat` per known file) and does a folder walk on every 10th tick.
-- **GitHub (`gh.rs`)** only runs three fixed shapes: `gh api user --jq .login`, `gh repo list --limit N --json <fixed list>`, `gh run list --repo OWNER/NAME --limit 1 --json status,conclusion`. No shell, 10 s timeout per call (killed), 8 MB output cap, owner/repo validated before use in argv. Opening a repo or revealing a transcript is a Rust command: the URL is built from validated names (`https://github.com/<owner>/<repo>`), and a transcript can only be revealed if the scanner itself found it.
-- **Shell:** tray, popup positioning, single instance, autostart and the file store (compare-and-swap, lock file, symlink policy, UTF-8/BOM handling) follow the same design as the author's Tasks Bar cross-platform app (not yet released). Capabilities list only the commands above plus notification and autostart; the CSP allows only the app's own files.
+| What | Details |
+|---|---|
+| Reads | Your agents' transcript files, read-only: `~/.claude/projects/*/*/subagents/agent-*.jsonl` and `~/.codex/sessions/*/*/*/rollout-*.jsonl` (last 24 hours). |
+| Shows | Only timestamps, token counts, tool names, task titles, `PROGRESS` lines and the first prompt of a session (cut to 200 characters). Replies, code and tool output never reach the window; a test checks this. |
+| Network | None of its own. The GitHub section runs your logged-in `gh` CLI with fixed commands. |
+| Stores | `settings.json` and `notified.json` in the app's data folder on your computer. Transcripts are never changed. |
+| Never | No analytics, no telemetry, no account, nothing sent to the author. |
 
-## What the page receives (privacy)
+Full detail: [docs/DETAILS.md](docs/DETAILS.md#what-the-page-receives-privacy). Agents Bar is an independent project, not
+affiliated with or endorsed by the makers of the supported tools.
 
-Transcripts can hold private prompts, code and file contents. The page gets only this, and a test (`npm run privacy`, `scanner.rs` canary tests) plants unique strings in every other place and fails if one crosses into the Rust output or the rendered page:
+## Build from source
 
-- per record: the timestamp, the record type, message and request ids, token counts, tool names and call ids;
-- lines of an agent's reply that are `PROGRESS: NN% - note` report lines (the marker onward, at most 400 characters), nothing else of any reply;
-- Codex: **one** text per file, the first user prompt that is not injected context (AGENTS.md, environment), whitespace-collapsed and cut to 200 characters (the page shows 80); later user turns, tool arguments and outputs are never sent;
-- Claude subagents: the `description` and `agentType` from the sibling `.meta.json` (that is the task title shown on the card), cut to 400 characters;
-- file paths (to show the project name in a notification and to reveal a transcript in the file manager).
+Needs Node 24+, Rust 1.90 or newer, and the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your
+system (on Linux: WebKitGTK 4.1 and an AppIndicator library, see `.github/workflows/ci.yml`). The GitHub section needs the
+[GitHub CLI](https://cli.github.com/) (`gh auth login`); the rest works without it.
 
-Nothing is written anywhere except `settings.json` and `notified.json` in the app's own data folder.
+```sh
+git clone https://github.com/RezzAk47/agents-bar-cross.git
+cd agents-bar-cross
+npm ci --ignore-scripts
+npm run tauri build          # installer for this OS, in src-tauri/target/release/bundle
+npm run tauri dev            # or run it in development mode
+```
 
-## Notifications
+Build with `npm run tauri build` (or `tauri dev`), not a plain `cargo build`: a plain cargo build does not embed the page and
+the window stays blank.
 
-They are sent from Rust (`notify` command, the notification plugin's Rust API), so the page learns about a real error (permission denied, no notification daemon) and the persisted retry (at most 3) is driven by it. **Honest limit:** the OS APIs only say whether the notification was accepted for display, not whether anyone saw it. Titles and bodies are stripped of `<`, `>`, `&` and control characters (some Linux daemons render markup).
+Tests:
 
-## Verified, and what was not
+```sh
+npm test && npx tsc --noEmit
+(cd src-tauri && cargo test --locked && cargo clippy --all-targets -- -D warnings)
+```
 
-Run by the author **on macOS only**: vitest (190 tests, re-run 2026-10-10), tsc, cargo test (`--locked`, 115 passed and 1 ignored, re-run 2026-10-11) and clippy `--all-targets -D warnings`, `tauri build --debug`, a real run of the debug app for 9 s against synthetic transcript folders and a fake gh (tray created, label `3 running · 3 finished` -> `2 running · 4 finished` when a synthetic agent handed back, `notified.json` written with the finish id), a real run against 12 synthetic 40 MB transcripts (a 480 MB cold start: the page stays on "Scanning…", no alert, no `notified.json`, main process 149 MB), the privacy canary (`npm run privacy`), Playwright screenshots and an accessibility/keyboard smoke test in Chrome, and a comparison of the TypeScript+Rust scanner against the Mac app's scanner on about 3,500 synthetic transcripts (that test harness is not published, so you cannot re-run it) (identical except the 300-file cap tie order for equal modification times).
+More checks (UI smoke test, screenshots, privacy canary, performance) are listed in [docs/DETAILS.md](docs/DETAILS.md#all-checks).
 
-**Not run by hand:** Windows and Linux. CI and the installer smoke test run on all three systems on GitHub. What was done for them on the Mac: `cargo check` and `cargo clippy --all-targets -D warnings` for `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-msvc` (the Linux system libraries and the Windows resource compiler were replaced by empty stand-ins, since type-checking needs neither), so the Linux and Windows code compiles and lints clean; none of it was executed. The code has `cfg` branches for them (data folders, `USERPROFILE`, no inode on Windows, sleep detector, `gh.exe` search); the CI workflow now runs on all three systems and passes (nobody has used those builds by hand). Notifications were not sent to the real OS in any test.
+## Status
 
-Performance (macOS, synthetic, 300 files, 56 MB of Claude transcripts + Codex): cold scan 217 ms in Rust (release, 2 calls), warm rescan 1.1 ms, folder walk 1.6 ms, TypeScript cold feed 72 ms, warm 0.16 ms. The debug app held 215 to 263 MB (main process) while reading an 87 MB tree; a release build is smaller (not measured).
+Early (v0.1.1). Developed and used on macOS. CI passes on Windows, Linux and macOS, and the installers install and start in an
+automated test on all three, but nobody has used the Windows or Linux builds by hand yet. Known limits and differences from
+the Mac app are in [docs/DETAILS.md](docs/DETAILS.md#differences-from-the-mac-bars-and-known-limits).
 
-## Differences from the Mac bars and known limits
+## Credits
 
-- `agent_metric` defaults to `percent` (the Mac default is `tokens`).
-- **No live desktop blur.** The popup is an ordinary window, so *Glass* and *Blur* only restyle the panel (tint and `backdrop-filter` between cards). The Mac material blur has no cross-platform equivalent here.
-- Settings is a pane in the popup, not inside a native menu. No separate GitHub tray icon: GitHub is a section of the same popup, refreshed every 10 minutes (and by Refresh).
-- On Linux under Wayland an app cannot place its own window. tao documents `set_outer_position` as unsupported there, Tauri's `center()` on Linux is only a computed `set_outer_position` (so it is ignored too), and Tauri has no layer-shell support. The app therefore detects Wayland (`WAYLAND_DISPLAY` / `XDG_SESSION_TYPE`), sets only the size, and opens the popup wherever your compositor puts it (the tray note in Settings says so). With `GDK_BACKEND=x11` the app runs through XWayland, where positioning works and the popup is placed at the top right as on X11. None of this has been run on a real Wayland desktop: it is read from the tao/Tauri source and its docs.
-- Notifications use the OS notification plugin: no sound or click action control. On Linux, tray icons cannot report clicks, so open the popup from the tray menu; GNOME needs the AppIndicator extension.
-- The ring/bar styles: *Ring* and *Ring everywhere* both draw rings on cards, *Bar* draws a bar. There is no ring in the tray icon itself, only text.
-- A PROGRESS note is cut at 400 characters after the marker; a long prefix before the marker no longer hides it (the Rust side finds the marker first).
-- **Mac parity details that differ on purpose or by limit:** non-string `.meta.json` values are shown as text (Python prints `True`, lists and objects in its own style; this app prints JSON text); the Mac and this app must **not share one `notified.json`** (alert ids are written the same way, but the file lives in different folders and nothing here reads `~/.agents-bar`). A line nested more than about 128 levels deep is skipped here; the Mac code (Python) crashes on 1000+ levels and loses the agent.
-- Glass layout: text colours are computed to keep 4.5:1 over the translucent card at every glass amount and over the gradient (tested), which can make the text slightly stronger than the Mac glass.
-- Transcript shapes were learned from the Mac implementation; Codex `turn_aborted` and the end of Claude subagent logs are only tested with made-up logs, as on the Mac.
-- A half-written last line that stays unfinished is re-read from its start on every tick (bounded by the 4 MB line cap).
-- `npm audit`: 0 vulnerabilities at the time of writing. Rust crates were not audited (`cargo audit` not installed).
+Based on [CLI-Usage](https://github.com/nimaansari/CLI-Usage) by Nima Ansari (MIT). His licence notice is in
+[NOTICE-CLI-Usage.md](NOTICE-CLI-Usage.md). Thank you, Nima.
 
-## Credit
+Third-party components and trademark notes: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (full licence texts in
+[THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt)).
 
-Based on [CLI-Usage](https://github.com/nimaansari/CLI-Usage) by Nima Ansari (MIT). His licence notice is in [NOTICE-CLI-Usage.md](NOTICE-CLI-Usage.md). Thank you, Nima.
+## License
 
-See `THIRD-PARTY-NOTICES.md` for the licences of the components this app uses (the full licence texts are in `THIRD-PARTY-LICENSES.txt`), and for trademark notes (Claude, Codex, GitHub and Apple names are used only descriptively; no affiliation or endorsement).
-
-
-## Releasing
-
-Releases are built by `.github/workflows/release.yml` when a version tag is pushed. The builds are unsigned (see the release notes text in that file). The release workflow builds the installers for all three systems on GitHub; expect small fixes on the first public release.
-
-1. Choose the new version, for example `0.2.0`, and change it in all three places so they match: `version` in `src-tauri/tauri.conf.json`, `version` in `src-tauri/Cargo.toml`, and `version` in `package.json`. Then run `cargo check` in `src-tauri` (and `npm install --package-lock-only`) so `Cargo.lock` and `package-lock.json` follow.
-2. Commit the change, then tag it: `git tag v0.2.0`. The tag must be `v` plus the exact version; the workflow stops with an error if it differs from `tauri.conf.json` or if the three versions disagree.
-3. Push the commit and the tag: `git push` and `git push origin v0.2.0`.
-4. Open the repository on GitHub, then Actions, and wait for the `release` run (macOS Apple silicon and Intel, Windows, Linux).
-5. Go to Releases, open the new draft, check that every installer is attached, read the notes, and click Publish release. Delete the draft and the tag if something is wrong.
+MIT. See [LICENSE](LICENSE).
 
 ## Contact
 
-rzk.karimi@gmail.com
+Questions or a security problem: rzk.karimi@gmail.com (see [SECURITY.md](SECURITY.md)).
